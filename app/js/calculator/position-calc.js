@@ -161,8 +161,8 @@ const PositionCalculator = {
         const orders = this.calculateTradeOrders(positions, holdings);
         
         // Store in state
-        CalculatorState.results.positions = positions;
-        CalculatorState.results.tradeOrders = orders;
+        CalculatorState.setResult('positions', positions);
+        CalculatorState.setResult('tradeOrders', orders);
         
         return { positions, orders };
     },
@@ -172,4 +172,3 @@ const PositionCalculator = {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = PositionCalculator;
 }
-

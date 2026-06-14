@@ -34,41 +34,114 @@ const RiskAnalysis = {
         }
         return returns;
     },
+
+    /**
+     * Normalize raw price rows into valid date/price points
+     * @param {Array} prices - Array of {date, adjClose}
+     * @returns {Array} Cleaned and sorted price points
+     */
+    normalizePriceSeries(prices) {
+        if (!Array.isArray(prices)) {
+            return [];
+        }
+
+        return prices
+            .map(point => ({
+                date: point?.date,
+                adjClose: Number(point?.adjClose),
+            }))
+            .filter(point => point.date && Number.isFinite(point.adjClose) && point.adjClose > 0)
+            .sort((a, b) => a.date.localeCompare(b.date));
+    },
+
+    /**
+     * Align multiple price series on common trading dates
+     * @param {Object} priceHistory - {ticker: [{date, adjClose}]}
+     * @param {string[]} tickers - Tickers to align
+     * @returns {Object} {alignedPrices, commonDates}
+     */
+    alignPriceSeriesByDate(priceHistory, tickers) {
+        const normalized = {};
+        const validTickers = tickers.filter(ticker => {
+            const series = this.normalizePriceSeries(priceHistory[ticker]);
+            if (series.length < 2) {
+                return false;
+            }
+            normalized[ticker] = series;
+            return true;
+        });
+
+        if (validTickers.length === 0) {
+            return { alignedPrices: {}, commonDates: [] };
+        }
+
+        let commonDates = new Set(normalized[validTickers[0]].map(point => point.date));
+        for (let i = 1; i < validTickers.length; i++) {
+            const dates = new Set(normalized[validTickers[i]].map(point => point.date));
+            commonDates = new Set([...commonDates].filter(date => dates.has(date)));
+        }
+
+        const orderedDates = [...commonDates].sort();
+        const alignedPrices = {};
+        validTickers.forEach(ticker => {
+            const priceMap = new Map(normalized[ticker].map(point => [point.date, point.adjClose]));
+            alignedPrices[ticker] = orderedDates.map(date => ({
+                date,
+                adjClose: priceMap.get(date),
+            }));
+        });
+
+        return { alignedPrices, commonDates: orderedDates };
+    },
     
     /**
-     * Calculate weighted portfolio returns
+     * Calculate weighted portfolio returns on common trading dates
      * @param {Object} priceHistory - {ticker: [{date, adjClose}]}
      * @param {Object} weights - {ticker: weight}
      * @returns {Array} Array of daily portfolio returns
      */
     calculatePortfolioReturns(priceHistory, weights) {
-        // Calculate returns for each asset
-        const assetReturns = {};
-        let minLength = Infinity;
-        
-        for (const [ticker, prices] of Object.entries(priceHistory)) {
-            if (weights[ticker] === undefined) continue;
-            assetReturns[ticker] = this.calculateDailyReturns(prices);
-            minLength = Math.min(minLength, assetReturns[ticker].length);
-        }
-        
-        if (minLength === 0 || minLength === Infinity) {
+        return this.calculatePortfolioReturnSeries(priceHistory, weights).map(point => point.return);
+    },
+
+    /**
+     * Calculate weighted portfolio returns on common trading dates with dates
+     * @param {Object} priceHistory - {ticker: [{date, adjClose}]}
+     * @param {Object} weights - {ticker: weight}
+     * @returns {Array} Array of {date, return}
+     */
+    calculatePortfolioReturnSeries(priceHistory, weights) {
+        const tickers = Object.entries(weights)
+            .filter(([, weight]) => weight !== undefined)
+            .map(([ticker]) => ticker);
+        const { alignedPrices } = this.alignPriceSeriesByDate(priceHistory, tickers);
+        const alignedTickers = Object.keys(alignedPrices);
+
+        if (alignedTickers.length === 0) {
             return [];
         }
-        
-        // Calculate weighted portfolio returns
-        const portfolioReturns = [];
-        
-        for (let i = 0; i < minLength; i++) {
-            let dayReturn = 0;
-            for (const [ticker, weight] of Object.entries(weights)) {
-                if (assetReturns[ticker]) {
-                    dayReturn += weight * assetReturns[ticker][i];
-                }
-            }
-            portfolioReturns.push(dayReturn);
+
+        const assetReturns = {};
+        alignedTickers.forEach(ticker => {
+            assetReturns[ticker] = this.calculateDailyReturns(alignedPrices[ticker]);
+        });
+
+        const returnLength = Math.min(...alignedTickers.map(ticker => assetReturns[ticker].length));
+        if (!Number.isFinite(returnLength) || returnLength <= 0) {
+            return [];
         }
-        
+
+        const portfolioReturns = [];
+        for (let i = 0; i < returnLength; i++) {
+            const dayReturn = alignedTickers.reduce((sum, ticker) => {
+                return sum + ((weights[ticker] || 0) * assetReturns[ticker][i]);
+            }, 0);
+            portfolioReturns.push({
+                date: alignedPrices[alignedTickers[0]][i + 1].date,
+                return: dayReturn,
+            });
+        }
+
         return portfolioReturns;
     },
     
@@ -107,10 +180,17 @@ const RiskAnalysis = {
      */
     calculateExpectedReturn(portfolioReturns) {
         const dailyMean = this.mean(portfolioReturns);
-        const annualizedReturn = dailyMean * this.TRADING_DAYS_PER_YEAR;
+        const annualizedArithmeticReturn = dailyMean * this.TRADING_DAYS_PER_YEAR;
+        const compoundedGrowth = portfolioReturns.reduce((growth, dailyReturn) => {
+            return growth * (1 + dailyReturn);
+        }, 1);
+        const annualizedReturn = portfolioReturns.length > 0
+            ? Math.pow(compoundedGrowth, this.TRADING_DAYS_PER_YEAR / portfolioReturns.length) - 1
+            : 0;
         
         return {
             dailyReturn: dailyMean,
+            annualizedArithmeticReturn,
             annualizedReturn: annualizedReturn,
         };
     },
@@ -157,6 +237,113 @@ const RiskAnalysis = {
         const periodVolatility = dailyVolatility * Math.sqrt(days);
         return portfolioValue * periodVolatility * z;
     },
+
+    /**
+     * Calculate maximum drawdown from a return series
+     * Drawdown is measured peak-to-trough, where the peak must occur first.
+     * @param {Array} returns - Period returns
+     * @param {number} startingValue - Starting portfolio value
+     * @returns {number} Max drawdown as a positive decimal
+     */
+    calculateMaxDrawdown(returns, startingValue = 1) {
+        if (!Array.isArray(returns) || returns.length === 0 || startingValue <= 0) {
+            return 0;
+        }
+
+        let equity = startingValue;
+        let peak = startingValue;
+        let maxDrawdown = 0;
+
+        for (const periodReturn of returns) {
+            equity *= (1 + periodReturn);
+            peak = Math.max(peak, equity);
+            const drawdown = peak > 0 ? (peak - equity) / peak : 0;
+            maxDrawdown = Math.max(maxDrawdown, drawdown);
+        }
+
+        return maxDrawdown;
+    },
+
+    /**
+     * Calculate inclusive calendar-day span between two YYYY-MM-DD dates
+     * @param {string} startDate - Episode start date
+     * @param {string} endDate - Episode end date
+     * @returns {number} Inclusive day count
+     */
+    calculateInclusiveDateCount(startDate, endDate) {
+        if (!startDate || !endDate) return 0;
+
+        const start = new Date(`${startDate}T00:00:00Z`);
+        const end = new Date(`${endDate}T00:00:00Z`);
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const diff = Math.round((end - start) / msPerDay);
+
+        return diff >= 0 ? diff + 1 : 0;
+    },
+
+    /**
+     * Calculate top drawdown episodes from a dated return series
+     * @param {Array} returnSeries - Array of {date, return}
+     * @param {number} startingValue - Starting portfolio value
+     * @param {number} limit - Maximum number of episodes
+     * @returns {Array} Ranked drawdown episodes
+     */
+    calculateTopDrawdowns(returnSeries, startingValue = 1, limit = 10) {
+        if (!Array.isArray(returnSeries) || returnSeries.length === 0 || startingValue <= 0) {
+            return [];
+        }
+
+        let equity = startingValue;
+        let peakValue = startingValue;
+        let peakDate = returnSeries[0].date;
+        let worstEpisode = null;
+        const episodes = [];
+
+        for (let i = 0; i < returnSeries.length; i++) {
+            const point = returnSeries[i];
+            equity *= (1 + point.return);
+
+            if (equity >= peakValue) {
+                if (worstEpisode && worstEpisode.endDate) {
+                    worstEpisode.dateCount = this.calculateInclusiveDateCount(
+                        worstEpisode.startDate,
+                        worstEpisode.endDate
+                    );
+                    episodes.push(worstEpisode);
+                    worstEpisode = null;
+                }
+                peakValue = equity;
+                peakDate = point.date;
+                continue;
+            }
+
+            const drawdown = peakValue > 0 ? (peakValue - equity) / peakValue : 0;
+            const startDate = peakDate;
+            const endDate = point.date;
+            const dateCount = this.calculateInclusiveDateCount(startDate, endDate);
+
+            if (!worstEpisode || drawdown > worstEpisode.drawdown) {
+                worstEpisode = {
+                    drawdown,
+                    startDate,
+                    endDate,
+                    dateCount,
+                };
+            }
+        }
+
+        if (worstEpisode && worstEpisode.endDate) {
+            worstEpisode.dateCount = this.calculateInclusiveDateCount(
+                worstEpisode.startDate,
+                worstEpisode.endDate
+            );
+            episodes.push(worstEpisode);
+        }
+
+        return episodes
+            .sort((a, b) => b.drawdown - a.drawdown)
+            .slice(0, limit);
+    },
     
     /**
      * Calculate daily returns WITH dates from price history
@@ -164,17 +351,18 @@ const RiskAnalysis = {
      * @returns {Array} Array of {date, return}
      */
     calculateDailyReturnsWithDates(prices) {
-        if (!prices || prices.length < 2) {
+        const normalized = this.normalizePriceSeries(prices);
+        if (normalized.length < 2) {
             return [];
         }
         
         const returns = [];
-        for (let i = 1; i < prices.length; i++) {
-            const prevPrice = prices[i - 1].adjClose;
-            const currPrice = prices[i].adjClose;
-            if (prevPrice > 0) {
+        for (let i = 1; i < normalized.length; i++) {
+            const prevPrice = normalized[i - 1].adjClose;
+            const currPrice = normalized[i].adjClose;
+            if (prevPrice > 0 && Number.isFinite(currPrice)) {
                 returns.push({
-                    date: prices[i].date,
+                    date: normalized[i].date,
                     return: (currPrice - prevPrice) / prevPrice,
                 });
             }
@@ -183,36 +371,17 @@ const RiskAnalysis = {
     },
     
     /**
-     * Calculate correlation between two assets using date-aligned returns
-     * @param {Array} returns1 - First return series with dates [{date, return}]
-     * @param {Array} returns2 - Second return series with dates [{date, return}]
+     * Calculate correlation between two aligned return series
+     * @param {Array} returns1 - First return series
+     * @param {Array} returns2 - Second return series
      * @returns {number} Correlation coefficient (-1 to 1)
      */
     calculateCorrelation(returns1, returns2) {
-        // Create date -> return maps for fast lookup
-        const map1 = new Map();
-        const map2 = new Map();
-        
-        for (const r of returns1) {
-            map1.set(r.date, r.return);
-        }
-        for (const r of returns2) {
-            map2.set(r.date, r.return);
-        }
-        
-        // Find common dates and build aligned arrays
-        const aligned1 = [];
-        const aligned2 = [];
-        
-        for (const [date, ret1] of map1) {
-            if (map2.has(date)) {
-                aligned1.push(ret1);
-                aligned2.push(map2.get(date));
-            }
-        }
-        
-        const n = aligned1.length;
+        const n = Math.min(returns1?.length || 0, returns2?.length || 0);
         if (n < 2) return 0;
+
+        const aligned1 = returns1.slice(0, n);
+        const aligned2 = returns2.slice(0, n);
         
         // Calculate means
         const mean1 = this.mean(aligned1);
@@ -247,46 +416,43 @@ const RiskAnalysis = {
         const n = tickers.length;
         
         if (n === 0) return { tickers: [], matrix: [], commonDates: 0 };
-        
-        // Calculate returns WITH dates for each asset
-        const assetReturns = {};
-        for (const ticker of tickers) {
-            assetReturns[ticker] = this.calculateDailyReturnsWithDates(priceHistory[ticker]);
+        const { alignedPrices, commonDates } = this.alignPriceSeriesByDate(priceHistory, tickers);
+        const alignedTickers = tickers.filter(ticker => alignedPrices[ticker]?.length >= 2);
+
+        if (alignedTickers.length === 0) {
+            return { tickers: [], matrix: [], commonDates: 0 };
         }
+
+        const assetReturns = {};
+        alignedTickers.forEach(ticker => {
+            assetReturns[ticker] = this.calculateDailyReturns(alignedPrices[ticker]);
+        });
         
         // Build correlation matrix
         const matrix = [];
-        let minCommonDates = Infinity;
         
-        for (let i = 0; i < n; i++) {
+        for (let i = 0; i < alignedTickers.length; i++) {
             const row = [];
-            for (let j = 0; j < n; j++) {
+            for (let j = 0; j < alignedTickers.length; j++) {
                 if (i === j) {
                     row.push(1.0); // Self-correlation is 1
                 } else if (j < i) {
                     row.push(matrix[j][i]); // Matrix is symmetric
                 } else {
-                    // Calculate correlation with date alignment
                     const corr = this.calculateCorrelation(
-                        assetReturns[tickers[i]],
-                        assetReturns[tickers[j]]
+                        assetReturns[alignedTickers[i]],
+                        assetReturns[alignedTickers[j]]
                     );
                     row.push(corr);
-                    
-                    // Track common dates for info
-                    const dates1 = new Set(assetReturns[tickers[i]].map(r => r.date));
-                    const dates2 = new Set(assetReturns[tickers[j]].map(r => r.date));
-                    const commonCount = [...dates1].filter(d => dates2.has(d)).length;
-                    minCommonDates = Math.min(minCommonDates, commonCount);
                 }
             }
             matrix.push(row);
         }
         
         return { 
-            tickers, 
+            tickers: alignedTickers, 
             matrix, 
-            commonDates: minCommonDates === Infinity ? 0 : minCommonDates 
+            commonDates: Math.max(commonDates.length - 1, 0),
         };
     },
     
@@ -305,38 +471,51 @@ const RiskAnalysis = {
         const weights = CalculatorState.getWeights();
         const targetCash = CalculatorState.config.targetCash;
         const leverageRate = CalculatorState.config.leverageRate || 1;
-        const riskFreeRate = CalculatorState.config.riskFreeRate || 0.05;
+        const riskFreeRate = 0;
         
         // Gross exposure (position size) shown for reference only.
         // Risk metrics below are computed on equity/cash basis.
         const grossExposure = targetCash * leverageRate;
         
         // Calculate portfolio returns
-        const portfolioReturns = this.calculatePortfolioReturns(priceHistory, weights);
+        const portfolioReturnSeries = this.calculatePortfolioReturnSeries(priceHistory, weights);
+        const portfolioReturns = portfolioReturnSeries.map(point => point.return);
         
         if (portfolioReturns.length === 0) {
             return null;
         }
         
-        // Calculate base (unleveraged) metrics
+        // Calculate base asset-only metrics before leverage is applied.
         const returnStats = this.calculateExpectedReturn(portfolioReturns);
         const volStats = this.calculateVolatility(portfolioReturns);
         
-        // Apply leverage to returns and volatility
-        // Leverage amplifies both gains and losses
+        // Translate the asset basket into equity/cash returns.
+        // Using target cash as the base means leverage scales both return and volatility.
         const leveragedDailyReturn = returnStats.dailyReturn * leverageRate;
-        const leveragedAnnualizedReturn = returnStats.annualizedReturn * leverageRate;
+        const leveragedAnnualizedArithmeticReturn =
+            returnStats.annualizedArithmeticReturn * leverageRate;
         const leveragedDailyVolatility = volStats.dailyVolatility * leverageRate;
         const leveragedAnnualizedVolatility = volStats.annualizedVolatility * leverageRate;
+        const leveragedAnnualizedReturn = Math.pow(
+            1 + leveragedDailyReturn,
+            this.TRADING_DAYS_PER_YEAR
+        ) - 1;
+        const leveragedPortfolioReturns = portfolioReturns.map(periodReturn => periodReturn * leverageRate);
+        const leveragedPortfolioReturnSeries = portfolioReturnSeries.map(point => ({
+            date: point.date,
+            return: point.return * leverageRate,
+        }));
         
         // Sharpe ratio calculation (uses leveraged metrics)
         // Note: Sharpe ratio remains the same with leverage (both return and vol scale equally)
         // But we calculate based on leveraged values for consistency
         const sharpeRatio = this.calculateSharpeRatio(
-            leveragedAnnualizedReturn,
+            leveragedAnnualizedArithmeticReturn,
             leveragedAnnualizedVolatility,
             riskFreeRate
         );
+        const maxDrawdown = this.calculateMaxDrawdown(leveragedPortfolioReturns, targetCash);
+        const topDrawdowns = this.calculateTopDrawdowns(leveragedPortfolioReturnSeries, targetCash);
         
         // IMPORTANT: compute VaR in dollars on the investor's equity/cash base
         // (not on gross leveraged position size).
@@ -359,13 +538,15 @@ const RiskAnalysis = {
             
             // Base (unleveraged) metrics for projection calculations
             baseDailyReturn: returnStats.dailyReturn,
+            baseAnnualizedArithmeticReturn: returnStats.annualizedArithmeticReturn,
             baseDailyVolatility: volStats.dailyVolatility,
             baseAnnualizedReturn: returnStats.annualizedReturn,
             baseAnnualizedVolatility: volStats.annualizedVolatility,
             
             // Risk-adjusted
             sharpeRatio: sharpeRatio,
-            riskFreeRate: riskFreeRate,
+            maxDrawdown: maxDrawdown,
+            topDrawdowns,
             
             // VaR (dollar loss on equity/cash base)
             var95_1d: var95_1d,
@@ -383,11 +564,12 @@ const RiskAnalysis = {
             
             // Raw data for projection (base unleveraged returns)
             portfolioReturns: portfolioReturns,
+            portfolioReturnSeries,
             dataPoints: portfolioReturns.length,
         };
         
         // Store in state
-        CalculatorState.results.riskMetrics = metrics;
+        CalculatorState.setResult('riskMetrics', metrics);
         
         return metrics;
     },
@@ -397,4 +579,3 @@ const RiskAnalysis = {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = RiskAnalysis;
 }
-

@@ -190,6 +190,7 @@
     text-align: right;
 }
 
+
 .asset-price {
     flex: 1;
     text-align: right;
@@ -762,4 +763,3 @@
         flex-wrap: wrap;
     }
 }
-

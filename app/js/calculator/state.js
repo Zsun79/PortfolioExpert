@@ -6,6 +6,7 @@
 const CalculatorState = {
     // Storage key for persistence
     STORAGE_KEY: 'portfolioCalculator_state',
+    STORAGE_VERSION: 2,
     
     // Shared storage key with viewer
     VIEWER_STORAGE_KEY: 'portfolioViewer_state',
@@ -15,7 +16,7 @@ const CalculatorState = {
         targetCash: 100000,
         lookbackWindow: 252,  // Trading days
         leverageRate: 1,      // Leverage/margin rate (1 = no leverage)
-        allocationMode: 'weight', // 'weight' or 'shares'
+        allocationMode: 'weight', // 'weight', 'shares', or 'value'
         riskFreeRate: null,   // From Fed rate
     },
     
@@ -40,6 +41,17 @@ const CalculatorState = {
         riskMetrics: null,
         projection: null,
     },
+
+    // Persisted UI/session state
+    ui: {
+        statusText: 'Ready',
+        lastCalculatedAt: null,
+        dataStatus: {
+            status: 'checking',
+            text: 'Checking data...',
+        },
+        projectionView: 'distribution',
+    },
     
     // =========================================================================
     // Asset Management
@@ -51,8 +63,9 @@ const CalculatorState = {
      * @param {number} weight - Weight as decimal (0-1)
      * @param {number} currentShares - Current shares owned
      * @param {number} targetShares - Target shares (shares mode)
+     * @param {number} targetValue - Target dollar value (value mode)
      */
-    addAsset(ticker, weight, currentShares = 0, targetShares = 0) {
+    addAsset(ticker, weight, currentShares = 0, targetShares = 0, targetValue = 0) {
         ticker = ticker.toUpperCase().trim();
         
         // Check if already exists
@@ -61,12 +74,14 @@ const CalculatorState = {
             existing.weight = weight;
             existing.currentShares = currentShares;
             existing.targetShares = Math.max(0, Math.round(targetShares || existing.targetShares || 0));
+            existing.targetValue = Math.max(0, Number(targetValue ?? existing.targetValue ?? 0));
         } else {
             this.assets.push({
                 ticker,
                 weight,
                 currentShares,
                 targetShares: Math.max(0, Math.round(targetShares || 0)),
+                targetValue: Math.max(0, Number(targetValue || 0)),
             });
         }
         
@@ -106,6 +121,28 @@ const CalculatorState = {
         const asset = this.assets.find(a => a.ticker === ticker);
         if (asset) {
             asset.targetShares = Math.max(0, Math.round(shares || 0));
+            const price = this.prices?.[ticker]?.price;
+            if (price && price > 0) {
+                asset.targetValue = asset.targetShares * price;
+            }
+            this.saveToStorage();
+        }
+    },
+
+    /**
+     * Update target value for an asset
+     * @param {string} ticker - Ticker symbol
+     * @param {number} value - Target dollar value
+     */
+    updateTargetValue(ticker, value) {
+        const asset = this.assets.find(a => a.ticker === ticker);
+        if (asset) {
+            asset.targetValue = Math.max(0, Number(value || 0));
+            const price = this.prices?.[ticker]?.price;
+            if (price && price > 0) {
+                asset.targetShares = Math.max(0, Math.round(asset.targetValue / price));
+                asset.targetValue = asset.targetShares * price;
+            }
             this.saveToStorage();
         }
     },
@@ -209,10 +246,10 @@ const CalculatorState = {
 
     /**
      * Update allocation input mode
-     * @param {string} mode - 'weight' or 'shares'
+     * @param {string} mode - 'weight', 'shares', or 'value'
      */
     setAllocationMode(mode) {
-        this.config.allocationMode = mode === 'shares' ? 'shares' : 'weight';
+        this.config.allocationMode = ['shares', 'value'].includes(mode) ? mode : 'weight';
         this.saveToStorage();
     },
     
@@ -222,6 +259,57 @@ const CalculatorState = {
      */
     setRiskFreeRate(rate) {
         this.config.riskFreeRate = rate;
+        this.saveToStorage();
+    },
+
+    /**
+     * Replace latest prices cache
+     * @param {Object} prices - Latest prices keyed by ticker
+     */
+    setPrices(prices) {
+        this.prices = prices || {};
+        this.saveToStorage();
+    },
+
+    /**
+     * Merge data freshness status
+     * @param {Object} status - Partial data status
+     */
+    setDataStatus(status = {}) {
+        this.dataStatus = {
+            ...this.dataStatus,
+            ...status,
+            tickerStatus: status.tickerStatus || this.dataStatus.tickerStatus || {},
+        };
+        this.saveToStorage();
+    },
+
+    /**
+     * Set a single calculated result bucket
+     * @param {string} key - Result key
+     * @param {*} value - Result payload
+     */
+    setResult(key, value) {
+        if (!(key in this.results)) return;
+        this.results[key] = value;
+        this.saveToStorage();
+    },
+
+    /**
+     * Merge persisted UI state
+     * @param {Object} updates - Partial UI state
+     */
+    setUiState(updates = {}) {
+        const nextDataStatus = updates.dataStatus
+            ? { ...this.ui.dataStatus, ...updates.dataStatus }
+            : this.ui.dataStatus;
+
+        this.ui = {
+            ...this.ui,
+            ...updates,
+            dataStatus: nextDataStatus,
+        };
+        this.saveToStorage();
     },
     
     // =========================================================================
@@ -234,8 +322,13 @@ const CalculatorState = {
     saveToStorage() {
         try {
             const state = {
+                version: this.STORAGE_VERSION,
                 config: this.config,
                 assets: this.assets,
+                prices: this.prices,
+                dataStatus: this.dataStatus,
+                results: this.results,
+                ui: this.ui,
             };
             localStorage.setItem(this.STORAGE_KEY, JSON.stringify(state));
         } catch (e) {
@@ -252,13 +345,35 @@ const CalculatorState = {
             if (saved) {
                 const state = JSON.parse(saved);
                 this.config = { ...this.config, ...state.config };
-                this.config.allocationMode = this.config.allocationMode === 'shares' ? 'shares' : 'weight';
+                this.config.allocationMode = ['shares', 'value'].includes(this.config.allocationMode)
+                    ? this.config.allocationMode
+                    : 'weight';
                 this.assets = (state.assets || []).map(asset => ({
                     ...asset,
                     currentShares: Math.max(0, Math.round(asset.currentShares || 0)),
                     targetShares: Math.max(0, Math.round(asset.targetShares || 0)),
+                    targetValue: Math.max(0, Number(asset.targetValue || 0)),
                     weight: typeof asset.weight === 'number' ? asset.weight : 0,
                 }));
+                this.prices = state.prices || {};
+                this.dataStatus = {
+                    ...this.dataStatus,
+                    ...(state.dataStatus || {}),
+                    tickerStatus: state.dataStatus?.tickerStatus || {},
+                };
+                this.results = {
+                    ...this.results,
+                    ...(state.results || {}),
+                };
+                this.ui = {
+                    ...this.ui,
+                    ...(state.ui || {}),
+                    dataStatus: {
+                        ...this.ui.dataStatus,
+                        ...(state.ui?.dataStatus || {}),
+                    },
+                    projectionView: state.ui?.projectionView === 'continuous' ? 'continuous' : 'distribution',
+                };
                 return true;
             }
         } catch (e) {
@@ -268,24 +383,47 @@ const CalculatorState = {
     },
 
     /**
-     * Build weights and leverage from target shares and prices
+     * Build weights and leverage from target shares and/or values and prices
      * @param {Object} prices - {ticker: {price, ...}}
-     * @returns {Object} {weights, totalTargetValue, leverageRate}
+     * @returns {Object} {weights, totalTargetValue, leverageRate, explicitTargetShares}
      */
     getShareModePortfolio(prices = this.prices) {
         const valueByTicker = {};
+        const explicitTargetShares = {};
         let totalTargetValue = 0;
+        const mode = this.config.allocationMode;
 
         this.assets.forEach(asset => {
             const price = prices?.[asset.ticker]?.price;
-            const shares = Math.max(0, Math.round(asset.targetShares || 0));
-            if (price && shares > 0) {
-                const targetValue = shares * price;
+            if (mode === 'value' && (!price || price <= 0)) {
+                const targetValue = Math.max(0, Number(asset.targetValue || 0));
+                explicitTargetShares[asset.ticker] = 0;
                 valueByTicker[asset.ticker] = targetValue;
                 totalTargetValue += targetValue;
-            } else {
-                valueByTicker[asset.ticker] = 0;
+                return;
             }
+
+            if (!price || price <= 0) {
+                valueByTicker[asset.ticker] = 0;
+                explicitTargetShares[asset.ticker] = 0;
+                return;
+            }
+
+            const shares = mode === 'value'
+                ? Math.max(
+                    0,
+                    Math.round(
+                        (asset.targetShares || 0) > 0
+                            ? asset.targetShares
+                            : (asset.targetValue || 0) / price
+                    )
+                )
+                : Math.max(0, Math.round(asset.targetShares || 0));
+            const targetValue = shares * price;
+
+            explicitTargetShares[asset.ticker] = shares;
+            valueByTicker[asset.ticker] = targetValue;
+            totalTargetValue += targetValue;
         });
 
         const weights = {};
@@ -299,7 +437,7 @@ const CalculatorState = {
             ? Math.max(1, totalTargetValue / targetCash)
             : 1;
 
-        return { weights, totalTargetValue, leverageRate };
+        return { weights, totalTargetValue, leverageRate, explicitTargetShares };
     },
     
     /**
@@ -349,6 +487,15 @@ const CalculatorState = {
             isFresh: false,
             tickerStatus: {},
         };
+        this.ui = {
+            statusText: 'Ready',
+            lastCalculatedAt: null,
+            dataStatus: {
+                status: 'checking',
+                text: 'Checking data...',
+            },
+            projectionView: 'distribution',
+        };
         this.saveToStorage();
     },
 };
@@ -357,4 +504,3 @@ const CalculatorState = {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = CalculatorState;
 }
-

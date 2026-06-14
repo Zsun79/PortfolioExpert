@@ -30,6 +30,8 @@ const App = {
     
     // LocalStorage key
     STORAGE_KEY: 'portfolioViewer_state',
+    MONITOR_STORAGE_KEY: 'futuresMonitor_portfolio',
+    CALCULATOR_STORAGE_KEY: 'portfolioCalculator_state',
     
     /**
      * Initialize the application
@@ -184,6 +186,7 @@ const App = {
         // Data buttons
         document.getElementById('loadDataBtn').addEventListener('click', () => this.loadAllData());
         document.getElementById('updateAllBtn').addEventListener('click', () => this.updateAllData());
+        document.getElementById('importCalculatorBtn')?.addEventListener('click', () => this.importFromCalculator());
         
         // Backtest button
         document.getElementById('runBacktestBtn').addEventListener('click', () => this.runBacktest());
@@ -302,6 +305,120 @@ const App = {
         
         if (skipped.length > 0) {
             Utils.toast(`Already added: ${skipped.join(', ')}`, 'info');
+        }
+    },
+
+    /**
+     * Import futures monitor portfolio using fixed shares and latest monitor prices
+     */
+    importFromMonitor() {
+        try {
+            const saved = localStorage.getItem(this.MONITOR_STORAGE_KEY);
+            if (!saved) {
+                Utils.toast('No monitor portfolio found', 'info');
+                return;
+            }
+
+            const parsed = JSON.parse(saved);
+            const contracts = (parsed.contracts || []).filter(contract => {
+                return contract.ticker && Number.isFinite(contract.price) && contract.price > 0 &&
+                    Number.isFinite(contract.shares) && contract.shares > 0;
+            });
+
+            if (contracts.length === 0) {
+                Utils.toast('No monitor positions with shares and prices found', 'info');
+                return;
+            }
+
+            const values = contracts.map(contract => ({
+                ticker: contract.ticker,
+                value: contract.shares * contract.price,
+            }));
+            const totalValue = values.reduce((sum, item) => sum + item.value, 0);
+
+            if (!(totalValue > 0)) {
+                Utils.toast('Monitor portfolio total value is zero', 'error');
+                return;
+            }
+
+            this.state.selectedTickers = values.map(item => item.ticker);
+            this.state.weights = values.reduce((acc, item) => {
+                acc[item.ticker] = item.value / totalValue;
+                return acc;
+            }, {});
+
+            this.renderTickers();
+            this.renderWeights();
+            this.updateBacktestButton();
+            this.saveStateToStorage();
+
+            Utils.toast(`Imported ${values.length} monitor positions by share`, 'success');
+        } catch (error) {
+            console.error('Failed to import monitor portfolio:', error);
+            Utils.toast('Failed to import monitor portfolio', 'error');
+        }
+    },
+
+    /**
+     * Import calculator portfolio using fixed shares and latest calculator prices
+     */
+    importFromCalculator() {
+        try {
+            const saved = localStorage.getItem(this.CALCULATOR_STORAGE_KEY);
+            if (!saved) {
+                Utils.toast('No calculator portfolio found', 'info');
+                return;
+            }
+
+            const parsed = JSON.parse(saved);
+            const assets = parsed.assets || [];
+            const prices = parsed.prices || {};
+            const positions = assets
+                .map(asset => {
+                    const shares = Math.max(
+                        0,
+                        Math.round(
+                            (asset.targetShares || 0) > 0
+                                ? asset.targetShares
+                                : (asset.currentShares || 0)
+                        )
+                    );
+                    const price = prices?.[asset.ticker]?.price;
+                    return {
+                        ticker: asset.ticker,
+                        shares,
+                        price,
+                        value: Number.isFinite(price) && price > 0 ? shares * price : 0,
+                    };
+                })
+                .filter(position => position.ticker && position.shares > 0 && position.value > 0);
+
+            if (positions.length === 0) {
+                Utils.toast('No calculator positions with shares and prices found', 'info');
+                return;
+            }
+
+            const totalValue = positions.reduce((sum, position) => sum + position.value, 0);
+            if (!(totalValue > 0)) {
+                Utils.toast('Calculator portfolio total value is zero', 'error');
+                return;
+            }
+
+            this.state.selectedTickers = positions.map(position => position.ticker);
+            this.state.weights = positions.reduce((acc, position) => {
+                acc[position.ticker] = position.value / totalValue;
+                return acc;
+            }, {});
+
+            this.renderTickers();
+            this.renderWeights();
+            this.updateBacktestButton();
+            this.saveStateToStorage();
+
+            Utils.toast(`Imported ${positions.length} calculator positions by share`, 'success');
+        } catch (error) {
+            console.error('Failed to import calculator portfolio:', error);
+            Utils.toast('Failed to import calculator portfolio', 'error');
         }
     },
     
@@ -2113,5 +2230,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Export for global access
 window.App = App;
-
-

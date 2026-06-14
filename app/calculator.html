@@ -21,6 +21,7 @@
             <div class="header-left">
                 <h1>📈 Portfolio Tools</h1>
                 <nav class="main-nav">
+                    <a href="asset-analysis.html" class="nav-tab">Asset Analysis</a>
                     <a href="stat-analysis.html" class="nav-tab">Stat Analysis</a>
                     <a href="index.html" class="nav-tab">Backtest</a>
                     <a href="calculator.html" class="nav-tab active">Calculator</a>
@@ -59,7 +60,7 @@
                     <div class="config-row">
                         <label>Leverage Rate</label>
                         <input type="number" id="leverageRate" value="1" min="1" max="10" step="0.1">
-                        <p id="leverageHint" class="hint-text">Manual in Weight mode; auto-calculated in Shares mode.</p>
+                        <p id="leverageHint" class="hint-text">Manual in Weight mode; auto-calculated in Shares or Value mode.</p>
                     </div>
                 </section>
                 
@@ -75,6 +76,7 @@
                         <select id="allocationMode">
                             <option value="weight">Weight %</option>
                             <option value="shares">Shares</option>
+                            <option value="value">Value $</option>
                         </select>
                     </div>
                     
@@ -127,6 +129,63 @@
             
             <!-- Right Panel: Results -->
             <section class="calc-results-panel">
+                <!-- Performance -->
+                <div id="riskMetrics" class="result-card" style="display: none;">
+                    <h2 class="card-title">
+                        <span class="icon">📉</span>
+                        Performance
+                    </h2>
+                    <div class="metrics-grid">
+                        <div class="metric-item">
+                            <span class="metric-label">Expected Return (Annual)</span>
+                            <span id="expectedReturn" class="metric-value">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Volatility (Annual)</span>
+                            <span id="volatility" class="metric-value">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Sharpe Ratio</span>
+                            <span id="sharpeRatio" class="metric-value">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Max Drawdown</span>
+                            <span id="maxDrawdown" class="metric-value negative">-</span>
+                        </div>
+                        <div class="metric-item var-metric">
+                            <span class="metric-label">VaR (95%, 30-day)</span>
+                            <span id="var95" class="metric-value negative">-</span>
+                        </div>
+                        <div class="metric-item var-metric">
+                            <span class="metric-label">VaR (99%, 30-day)</span>
+                            <span id="var99" class="metric-value negative">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Drawdowns -->
+                <div id="drawdownCard" class="result-card" style="display: none;">
+                    <h2 class="card-title">
+                        <span class="icon">📊</span>
+                        Top 10 Drawdowns
+                    </h2>
+                    <div class="position-table-container">
+                        <table id="drawdownTable" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Drawdown</th>
+                                    <th>Dates</th>
+                                    <th>Start</th>
+                                    <th>End</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Drawdown rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Position Summary -->
                 <div id="positionSummary" class="result-card" style="display: none;">
                     <h2 class="card-title">
@@ -162,51 +221,6 @@
                     </div>
                 </div>
                 
-                <!-- Trade Orders -->
-                <div id="tradeOrders" class="result-card" style="display: none;">
-                    <h2 class="card-title">
-                        <span class="icon">🔄</span>
-                        Trade Orders
-                    </h2>
-                    <div id="tradeOrdersList" class="trade-orders-list">
-                        <!-- Trade orders -->
-                    </div>
-                </div>
-                
-                <!-- Risk Metrics -->
-                <div id="riskMetrics" class="result-card" style="display: none;">
-                    <h2 class="card-title">
-                        <span class="icon">📉</span>
-                        Risk Analysis
-                    </h2>
-                    <div class="metrics-grid">
-                        <div class="metric-item">
-                            <span class="metric-label">Expected Return (Annual)</span>
-                            <span id="expectedReturn" class="metric-value">-</span>
-                        </div>
-                        <div class="metric-item">
-                            <span class="metric-label">Volatility (Annual)</span>
-                            <span id="volatility" class="metric-value">-</span>
-                        </div>
-                        <div class="metric-item">
-                            <span class="metric-label">Sharpe Ratio</span>
-                            <span id="sharpeRatio" class="metric-value">-</span>
-                        </div>
-                        <div class="metric-item">
-                            <span class="metric-label">Risk-Free Rate</span>
-                            <span id="riskFreeRate" class="metric-value">-</span>
-                        </div>
-                        <div class="metric-item var-metric">
-                            <span class="metric-label">VaR (95%, 30-day)</span>
-                            <span id="var95" class="metric-value negative">-</span>
-                        </div>
-                        <div class="metric-item var-metric">
-                            <span class="metric-label">VaR (99%, 30-day)</span>
-                            <span id="var99" class="metric-value negative">-</span>
-                        </div>
-                    </div>
-                </div>
-                
                 <!-- Correlation Matrix -->
                 <div id="correlationCard" class="result-card" style="display: none;">
                     <h2 class="card-title">
@@ -226,14 +240,6 @@
                             <span class="icon">🎯</span>
                             Value Projection
                         </h2>
-                        <div class="view-toggle">
-                            <button id="distributionViewBtn" class="toggle-btn active" onclick="Projection.switchView('distribution')">
-                                <span class="icon">📊</span> Distribution
-                            </button>
-                            <button id="continuousViewBtn" class="toggle-btn" onclick="Projection.switchView('continuous')">
-                                <span class="icon">📈</span> Timeline
-                            </button>
-                        </div>
                     </div>
                     
                     <div class="projection-summary">
@@ -251,30 +257,8 @@
                         </div>
                     </div>
                     
-                    <!-- Distribution View: 4 subfigures -->
-                    <div id="distributionView" class="projection-view">
-                        <div class="projection-grid">
-                            <div class="projection-subfig">
-                                <div class="subfig-label">1 Month (21 trading days)</div>
-                                <div id="projChart1m" class="subfig-chart"></div>
-                            </div>
-                            <div class="projection-subfig">
-                                <div class="subfig-label">3 Months (63 trading days)</div>
-                                <div id="projChart3m" class="subfig-chart"></div>
-                            </div>
-                            <div class="projection-subfig">
-                                <div class="subfig-label">6 Months (126 trading days)</div>
-                                <div id="projChart6m" class="subfig-chart"></div>
-                            </div>
-                            <div class="projection-subfig">
-                                <div class="subfig-label">1 Year (252 trading days)</div>
-                                <div id="projChart1y" class="subfig-chart"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Continuous View: Timeline chart -->
-                    <div id="continuousView" class="projection-view" style="display: none;">
+                    <!-- Timeline chart -->
+                    <div class="projection-view">
                         <div id="projChartContinuous" class="continuous-chart"></div>
                     </div>
                 </div>
@@ -321,4 +305,3 @@
     <script src="js/calculator/main.js"></script>
 </body>
 </html>
-

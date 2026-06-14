@@ -16,6 +16,7 @@
             <div class="header-left">
                 <h1>📈 Portfolio Expert</h1>
                 <nav class="main-nav">
+                    <a href="asset-analysis.html" class="nav-tab">Asset Analysis</a>
                     <a href="stat-analysis.html" class="nav-tab">Stat Analysis</a>
                     <a href="index.html" class="nav-tab">Backtest</a>
                     <a href="calculator.html" class="nav-tab">Calculator</a>
@@ -73,6 +74,11 @@
                                     <span class="price" id="NQ-spot-price">--</span>
                                 </div>
                             </div>
+                            <div class="position-row">
+                                <label for="NQ-position-shares">Contracts / Shares</label>
+                                <input type="number" id="NQ-position-shares" min="0" step="1" value="0"
+                                       onchange="FuturesMonitor.updatePositionShares('NQ', this.value)">
+                            </div>
                             <div class="basis-row">
                                 <div class="basis-item">
                                     <label>Basis</label>
@@ -109,6 +115,11 @@
                                     <label>Implied Spot (^TYX)</label>
                                     <span class="price" id="ZB-spot-price">--</span>
                                 </div>
+                            </div>
+                            <div class="position-row">
+                                <label for="ZB-position-shares">Contracts / Shares</label>
+                                <input type="number" id="ZB-position-shares" min="0" step="1" value="0"
+                                       onchange="FuturesMonitor.updatePositionShares('ZB', this.value)">
                             </div>
                             <div class="basis-row">
                                 <div class="basis-item">
@@ -147,6 +158,11 @@
                                     <span class="price" id="GC-spot-price">--</span>
                                 </div>
                             </div>
+                            <div class="position-row">
+                                <label for="GC-position-shares">Contracts / Shares</label>
+                                <input type="number" id="GC-position-shares" min="0" step="1" value="0"
+                                       onchange="FuturesMonitor.updatePositionShares('GC', this.value)">
+                            </div>
                             <div class="basis-row">
                                 <div class="basis-item">
                                     <label>Basis</label>
@@ -183,6 +199,11 @@
                                     <label>Spot (DX-Y.NYB)</label>
                                     <span class="price" id="DX-spot-price">--</span>
                                 </div>
+                            </div>
+                            <div class="position-row">
+                                <label for="DX-position-shares">Contracts / Shares</label>
+                                <input type="number" id="DX-position-shares" min="0" step="1" value="0"
+                                       onchange="FuturesMonitor.updatePositionShares('DX', this.value)">
                             </div>
                             <div class="basis-row">
                                 <div class="basis-item">

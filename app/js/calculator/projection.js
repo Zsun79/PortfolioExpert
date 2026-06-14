@@ -1,7 +1,7 @@
 /**
  * Value Projection Module
- * Calculates and visualizes potential portfolio value distribution
- * Supports multiple time horizons (30d, 90d, 180d, 360d) and continuous projection
+ * Calculates and visualizes portfolio value projection
+ * Keeps a one-year summary plus a continuous timeline chart
  */
 
 const Projection = {
@@ -19,9 +19,6 @@ const Projection = {
     
     // Trading days per year
     TRADING_DAYS_PER_YEAR: 252,
-    
-    // Current view mode
-    currentView: 'distribution',
     
     // Stored projections for all horizons
     projections: {},
@@ -156,146 +153,6 @@ const Projection = {
         }
         
         return { days, expected, upper95, lower95, upper68, lower68 };
-    },
-    
-    /**
-     * Generate normal distribution curve for visualization
-     */
-    generateDistributionCurve(mean, std, numPoints = 100) {
-        const xMin = mean - 3.5 * std;
-        const xMax = mean + 3.5 * std;
-        const step = (xMax - xMin) / numPoints;
-        
-        const curve = [];
-        for (let i = 0; i <= numPoints; i++) {
-            const x = xMin + i * step;
-            const y = (1 / (std * Math.sqrt(2 * Math.PI))) * 
-                      Math.exp(-0.5 * Math.pow((x - mean) / std, 2));
-            curve.push({ x, y });
-        }
-        
-        return curve;
-    },
-    
-    /**
-     * Render a single distribution chart (compact version for grid)
-     */
-    renderDistributionChart(projection, containerId) {
-        const container = document.getElementById(containerId);
-        if (!container) return;
-        
-        const { expectedValue, standardDeviation, intervals, currentValue } = projection;
-        const curve = this.generateDistributionCurve(expectedValue, standardDeviation);
-        
-        const traces = [];
-        
-        // 95% confidence fill
-        traces.push({
-            x: curve.filter(p => p.x >= intervals.p95.low && p.x <= intervals.p95.high).map(p => p.x),
-            y: curve.filter(p => p.x >= intervals.p95.low && p.x <= intervals.p95.high).map(p => p.y),
-            fill: 'tozeroy',
-            type: 'scatter',
-            mode: 'none',
-            fillcolor: 'rgba(251, 191, 36, 0.2)',
-            name: '95% CI',
-            hoverinfo: 'skip',
-            showlegend: false,
-        });
-        
-        // 68% confidence fill
-        traces.push({
-            x: curve.filter(p => p.x >= intervals.p68.low && p.x <= intervals.p68.high).map(p => p.x),
-            y: curve.filter(p => p.x >= intervals.p68.low && p.x <= intervals.p68.high).map(p => p.y),
-            fill: 'tozeroy',
-            type: 'scatter',
-            mode: 'none',
-            fillcolor: 'rgba(16, 185, 129, 0.3)',
-            name: '68% CI',
-            hoverinfo: 'skip',
-            showlegend: false,
-        });
-        
-        // Distribution curve line
-        traces.push({
-            x: curve.map(p => p.x),
-            y: curve.map(p => p.y),
-            type: 'scatter',
-            mode: 'lines',
-            line: { color: '#f59e0b', width: 2 },
-            name: 'Distribution',
-            hovertemplate: '$%{x:,.0f}<extra></extra>',
-            showlegend: false,
-        });
-        
-        // Expected value marker
-        const maxY = Math.max(...curve.map(p => p.y));
-        traces.push({
-            x: [expectedValue],
-            y: [maxY * 0.9],
-            type: 'scatter',
-            mode: 'markers',
-            marker: { color: '#f59e0b', size: 8, symbol: 'diamond' },
-            name: 'Expected',
-            hovertemplate: 'Expected: $%{x:,.0f}<extra></extra>',
-            showlegend: false,
-        });
-        
-        // Current value line
-        traces.push({
-            x: [currentValue, currentValue],
-            y: [0, maxY],
-            type: 'scatter',
-            mode: 'lines',
-            line: { color: '#3b82f6', width: 1, dash: 'dash' },
-            name: 'Current',
-            hoverinfo: 'skip',
-            showlegend: false,
-        });
-        
-        const layout = {
-            autosize: true,
-            showlegend: false,
-            paper_bgcolor: 'transparent',
-            plot_bgcolor: 'transparent',
-            font: {
-                family: "'JetBrains Mono', monospace",
-                color: '#94a3b8',
-                size: 9,
-            },
-            margin: { l: 40, r: 10, t: 5, b: 30 },
-            xaxis: {
-                gridcolor: '#2d3748',
-                linecolor: '#2d3748',
-                tickformat: '$,.0s',
-                tickfont: { size: 8 },
-                nticks: 5,
-            },
-            yaxis: {
-                gridcolor: '#2d3748',
-                linecolor: '#2d3748',
-                showticklabels: false,
-            },
-            hovermode: 'closest',
-            annotations: [
-                {
-                    x: expectedValue,
-                    y: maxY,
-                    xref: 'x',
-                    yref: 'y',
-                    text: `$${this.formatMoney(expectedValue)}`,
-                    showarrow: false,
-                    font: { size: 9, color: '#f59e0b' },
-                    yanchor: 'bottom',
-                },
-            ],
-        };
-        
-        const config = {
-            responsive: true,
-            displayModeBar: false,
-        };
-        
-        Plotly.newPlot(container, traces, layout, config);
     },
     
     /**
@@ -443,66 +300,6 @@ const Projection = {
     },
     
     /**
-     * Render all distribution charts in the grid
-     */
-    renderDistributionGrid() {
-        const chartIds = {
-            21: 'projChart1m',
-            63: 'projChart3m',
-            126: 'projChart6m',
-            252: 'projChart1y',
-        };
-        
-        for (const days of this.TIME_HORIZONS) {
-            if (this.projections[days]) {
-                this.renderDistributionChart(this.projections[days], chartIds[days]);
-            }
-        }
-    },
-    
-    /**
-     * Switch between distribution and continuous views
-     */
-    switchView(view) {
-        this.currentView = view;
-        
-        const distributionView = document.getElementById('distributionView');
-        const continuousView = document.getElementById('continuousView');
-        const distributionBtn = document.getElementById('distributionViewBtn');
-        const continuousBtn = document.getElementById('continuousViewBtn');
-        
-        if (view === 'distribution') {
-            distributionView.style.display = 'flex';
-            continuousView.style.display = 'none';
-            distributionBtn.classList.add('active');
-            continuousBtn.classList.remove('active');
-            
-            // Re-render to ensure proper sizing
-            setTimeout(() => this.renderDistributionGrid(), 50);
-        } else {
-            distributionView.style.display = 'none';
-            continuousView.style.display = 'flex';
-            distributionBtn.classList.remove('active');
-            continuousBtn.classList.add('active');
-            
-            // Re-render to ensure proper sizing
-            setTimeout(() => this.renderContinuousChart(), 50);
-        }
-    },
-    
-    /**
-     * Format money value
-     */
-    formatMoney(value) {
-        if (value >= 1000000) {
-            return (value / 1000000).toFixed(1) + 'M';
-        } else if (value >= 1000) {
-            return (value / 1000).toFixed(0) + 'k';
-        }
-        return value.toFixed(0);
-    },
-    
-    /**
      * Run projection calculation and render all views
      * @returns {Object} Projection data for 1 year (252 trading days) used for summary
      */
@@ -512,10 +309,7 @@ const Projection = {
         if (!projections) return null;
         
         // Store in state (use 1 year / 252 trading days for main projection)
-        CalculatorState.results.projection = projections[252];
-        
-        // Render distribution grid
-        this.renderDistributionGrid();
+        CalculatorState.setResult('projection', projections[252]);
         
         // Render continuous chart
         this.renderContinuousChart();

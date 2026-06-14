@@ -3,6 +3,8 @@
  */
 
 const FuturesMonitor = {
+    STORAGE_KEY: 'futuresMonitor_portfolio',
+
     // Configuration for futures contracts
     contracts: [
         {
@@ -48,6 +50,7 @@ const FuturesMonitor = {
     
     // State
     data: {},
+    positions: {},
     isLoading: false,
     lastUpdate: null,
     
@@ -56,6 +59,8 @@ const FuturesMonitor = {
      */
     async init() {
         console.log('Initializing Futures Monitor...');
+
+        this.loadPositionsFromStorage();
         
         // Check API health
         const isConnected = await API.checkHealth();
@@ -66,6 +71,72 @@ const FuturesMonitor = {
         
         // Load data
         await this.refreshData();
+    },
+
+    /**
+     * Load saved monitor positions from localStorage
+     */
+    loadPositionsFromStorage() {
+        try {
+            const saved = localStorage.getItem(this.STORAGE_KEY);
+            if (!saved) return;
+
+            const parsed = JSON.parse(saved);
+            this.positions = parsed.positions || {};
+        } catch (error) {
+            console.warn('Failed to load futures monitor positions:', error);
+            this.positions = {};
+        }
+    },
+
+    /**
+     * Save monitor positions and latest prices for backtest import
+     */
+    savePositionsToStorage() {
+        try {
+            const contracts = this.contracts.map(contract => {
+                const shares = Math.max(0, Math.round(this.positions[contract.id] || 0));
+                const latest = this.data[contract.id];
+                return {
+                    id: contract.id,
+                    ticker: contract.futureTicker,
+                    shares,
+                    price: latest?.futuresPrice ?? null,
+                    priceDate: latest?.lastUpdate ? latest.lastUpdate.toISOString() : null,
+                    name: contract.name,
+                };
+            });
+
+            localStorage.setItem(this.STORAGE_KEY, JSON.stringify({
+                positions: this.positions,
+                contracts,
+                updatedAt: new Date().toISOString(),
+            }));
+        } catch (error) {
+            console.warn('Failed to save futures monitor positions:', error);
+        }
+    },
+
+    /**
+     * Update position shares for a contract
+     * @param {string} id - Contract id
+     * @param {string|number} value - Position size
+     */
+    updatePositionShares(id, value) {
+        this.positions[id] = Math.max(0, Math.round(parseFloat(value) || 0));
+        this.savePositionsToStorage();
+    },
+
+    /**
+     * Sync stored position inputs into the UI
+     */
+    syncPositionInputs() {
+        this.contracts.forEach(contract => {
+            const input = document.getElementById(`${contract.id}-position-shares`);
+            if (input) {
+                input.value = Math.max(0, Math.round(this.positions[contract.id] || 0));
+            }
+        });
     },
     
     /**
@@ -133,6 +204,7 @@ const FuturesMonitor = {
             this.updateLastUpdateTime();
             
             document.getElementById('statusText').textContent = 'Data updated successfully';
+            this.savePositionsToStorage();
             
         } catch (error) {
             console.error('Error refreshing data:', error);
@@ -205,9 +277,10 @@ const FuturesMonitor = {
                 isYield: contract.isYield,
             };
             
-            // Update UI
-            this.updateCard(contract.id, this.data[contract.id], contract);
-            card.classList.remove('error');
+        // Update UI
+        this.updateCard(contract.id, this.data[contract.id], contract);
+        this.syncPositionInputs();
+        card.classList.remove('error');
             
         } catch (error) {
             console.error(`Error fetching ${contract.name}:`, error);

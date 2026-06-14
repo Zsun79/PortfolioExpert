@@ -23,6 +23,10 @@ const CalculatorUI = {
         if (textEl) {
             textEl.textContent = text;
         }
+
+        CalculatorState.setUiState({
+            dataStatus: { status, text },
+        });
     },
     
     // =========================================================================
@@ -48,20 +52,41 @@ const CalculatorUI = {
             const price = CalculatorState.prices[asset.ticker];
             const hasValidPrice = Number.isFinite(price?.price);
             const priceStr = hasValidPrice ? `$${price.price.toFixed(2)}` : 'Loading...';
-            const allocationInput = mode === 'shares'
+            const derivedTargetValue = hasValidPrice
+                ? Math.max(0, Math.round((asset.targetShares || 0) * price.price))
+                : Math.max(0, Math.round(asset.targetValue || 0));
+            const derivedTargetShares = hasValidPrice
+                ? Math.max(
+                    0,
+                    Math.round(
+                        (asset.targetShares || 0) > 0
+                            ? asset.targetShares
+                            : (asset.targetValue || 0) / price.price
+                    )
+                )
+                : Math.max(0, Math.round(asset.targetShares || 0));
+            const allocationInput = mode === 'weight'
                 ? `
                     <input type="number" class="asset-weight-input" 
-                           value="${Math.round(asset.targetShares || 0)}" 
+                           value="${(asset.weight * 100).toFixed(1)}" 
+                           min="0" max="100" step="0.1"
+                           onchange="Calculator.onWeightChange('${asset.ticker}', this.value)">
+                    <span>%</span>
+                `
+                : mode === 'shares'
+                ? `
+                    <input type="number" class="asset-weight-input" 
+                           value="${derivedTargetShares}" 
                            min="0" step="1"
                            onchange="Calculator.onTargetSharesChange('${asset.ticker}', this.value)">
                     <span>sh</span>
                 `
                 : `
                     <input type="number" class="asset-weight-input" 
-                           value="${(asset.weight * 100).toFixed(1)}" 
-                           min="0" max="100" step="0.1"
-                           onchange="Calculator.onWeightChange('${asset.ticker}', this.value)">
-                    <span>%</span>
+                           value="${derivedTargetValue}" 
+                           min="0" step="1"
+                           onchange="Calculator.onTargetValueChange('${asset.ticker}', this.value)">
+                    <span>$</span>
                 `;
             
             return `
@@ -90,7 +115,7 @@ const CalculatorUI = {
         
         if (!totalEl) return;
         
-        if (mode === 'shares') {
+        if (mode === 'shares' || mode === 'value') {
             const { totalTargetValue } = CalculatorState.getShareModePortfolio();
             if (labelEl) {
                 labelEl.textContent = 'Total Target Value:';
@@ -181,64 +206,6 @@ const CalculatorUI = {
     },
     
     // =========================================================================
-    // Trade Orders
-    // =========================================================================
-    
-    /**
-     * Render trade orders
-     * @param {Object} ordersData - {orders, totals}
-     */
-    renderTradeOrders(ordersData) {
-        const card = document.getElementById('tradeOrders');
-        const container = document.getElementById('tradeOrdersList');
-        
-        if (!ordersData || ordersData.orders.length === 0) {
-            card.style.display = 'none';
-            return;
-        }
-        
-        // Check if there are any actual trades
-        const actualTrades = ordersData.orders.filter(o => o.action !== 'HOLD');
-        
-        if (actualTrades.length === 0) {
-            card.style.display = 'block';
-            container.innerHTML = '<p class="no-trades">No trades needed - portfolio is balanced</p>';
-            return;
-        }
-        
-        card.style.display = 'block';
-        
-        container.innerHTML = ordersData.orders.map(order => {
-            if (order.action === 'HOLD') return '';
-            
-            return `
-                <div class="trade-order">
-                    <span class="trade-action ${order.action.toLowerCase()}">${order.action}</span>
-                    <span class="trade-ticker">${order.ticker}</span>
-                    <span class="trade-details">
-                        ${order.shares.toLocaleString()} shares @ $${order.price.toFixed(2)}
-                    </span>
-                    <span class="trade-value">$${order.tradeValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-                </div>
-            `;
-        }).filter(Boolean).join('');
-        
-        // Add summary
-        if (ordersData.totals.netCashFlow !== 0) {
-            const flowType = ordersData.totals.netCashFlow > 0 ? 'receive' : 'spend';
-            const flowAmount = Math.abs(ordersData.totals.netCashFlow);
-            container.innerHTML += `
-                <div class="trade-order" style="margin-top: var(--spacing-sm); border-top: 1px solid var(--color-border); padding-top: var(--spacing-sm);">
-                    <span class="trade-details">Net cash ${flowType}:</span>
-                    <span class="trade-value ${flowType === 'receive' ? 'positive' : 'negative'}">
-                        $${flowAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                    </span>
-                </div>
-            `;
-        }
-    },
-    
-    // =========================================================================
     // Risk Metrics
     // =========================================================================
     
@@ -270,7 +237,8 @@ const CalculatorUI = {
         document.getElementById('sharpeRatio').className = 
             'metric-value ' + (metrics.sharpeRatio >= 0 ? 'positive' : 'negative');
         
-        document.getElementById('riskFreeRate').textContent = formatPct(metrics.riskFreeRate);
+        document.getElementById('maxDrawdown').textContent = formatPct(metrics.maxDrawdown);
+        document.getElementById('maxDrawdown').className = 'metric-value negative';
         
         document.getElementById('var95').textContent = formatMoney(metrics.var95_30d);
         document.getElementById('var99').textContent = formatMoney(metrics.var99_30d);
@@ -279,6 +247,32 @@ const CalculatorUI = {
         if (metrics.correlation) {
             this.renderCorrelationMatrix(metrics.correlation, metrics.dataPoints);
         }
+
+        this.renderTopDrawdowns(metrics.topDrawdowns);
+    },
+
+    /**
+     * Render top drawdown episodes
+     * @param {Array} drawdowns - Top drawdown episodes
+     */
+    renderTopDrawdowns(drawdowns) {
+        const card = document.getElementById('drawdownCard');
+        const tbody = document.querySelector('#drawdownTable tbody');
+
+        if (!card || !tbody || !Array.isArray(drawdowns) || drawdowns.length === 0) {
+            if (card) card.style.display = 'none';
+            return;
+        }
+
+        card.style.display = 'block';
+        tbody.innerHTML = drawdowns.map(episode => `
+            <tr>
+                <td>${(episode.drawdown * 100).toFixed(2)}%</td>
+                <td>${episode.dateCount}</td>
+                <td>${episode.startDate}</td>
+                <td>${episode.endDate}</td>
+            </tr>
+        `).join('');
     },
     
     // =========================================================================
@@ -378,9 +372,8 @@ const CalculatorUI = {
         document.getElementById('projExpectedValue').textContent = formatMoney(projection.expectedValue);
         document.getElementById('projRange95').textContent = 
             `${formatMoney(projection.intervals.p95.low)} - ${formatMoney(projection.intervals.p95.high)}`;
-        
-        // Reset to distribution view by default
-        Projection.switchView('distribution');
+
+        Projection.renderContinuousChart();
     },
     
     // =========================================================================
@@ -431,15 +424,53 @@ const CalculatorUI = {
     updateStatus(text) {
         const statusEl = document.getElementById('statusText');
         if (statusEl) statusEl.textContent = text;
+        CalculatorState.setUiState({ statusText: text });
     },
     
     /**
      * Update last calculated time
      */
-    updateLastCalculated() {
+    updateLastCalculated(timestamp = new Date().toISOString()) {
         const el = document.getElementById('lastCalculated');
         if (el) {
-            el.textContent = 'Last calculated: ' + new Date().toLocaleTimeString();
+            el.textContent = 'Last calculated: ' + new Date(timestamp).toLocaleTimeString();
+        }
+        CalculatorState.setUiState({ lastCalculatedAt: timestamp });
+    },
+
+    /**
+     * Restore persisted footer, status, and result cards
+     */
+    restorePersistedSession() {
+        const persistedDataStatus = CalculatorState.ui?.dataStatus;
+        if (persistedDataStatus?.status && persistedDataStatus?.text) {
+            const icon = document.getElementById('dataStatusIcon');
+            const textEl = document.getElementById('dataStatusText');
+            if (icon) {
+                icon.className = 'status-icon ' + persistedDataStatus.status;
+            }
+            if (textEl) {
+                textEl.textContent = persistedDataStatus.text;
+            }
+        }
+
+        const statusEl = document.getElementById('statusText');
+        if (statusEl) {
+            statusEl.textContent = CalculatorState.ui?.statusText || 'Ready';
+        }
+
+        const lastCalculatedAt = CalculatorState.ui?.lastCalculatedAt;
+        if (lastCalculatedAt) {
+            this.updateLastCalculated(lastCalculatedAt);
+        }
+
+        const { positions, riskMetrics, projection } = CalculatorState.results;
+        if (positions) this.renderPositionSummary(positions);
+        if (riskMetrics) this.renderRiskMetrics(riskMetrics);
+
+        if (riskMetrics && projection) {
+            Projection.calculateAll();
+            this.renderProjectionSummary(projection);
         }
     },
     
@@ -490,10 +521,12 @@ const CalculatorUI = {
 
     /**
      * Get allocation input mode
-     * @returns {string} 'weight' or 'shares'
+     * @returns {string} 'weight', 'shares', or 'value'
      */
     getAllocationMode() {
-        return CalculatorState.config.allocationMode === 'shares' ? 'shares' : 'weight';
+        return ['shares', 'value'].includes(CalculatorState.config.allocationMode)
+            ? CalculatorState.config.allocationMode
+            : 'weight';
     },
     
     /**
@@ -510,6 +543,7 @@ const CalculatorUI = {
             ticker: tickerInput?.value.toUpperCase().trim() || '',
             weight: mode === 'weight' ? rawValue / 100 : 0,
             targetShares: mode === 'shares' ? Math.max(0, Math.round(rawValue)) : 0,
+            targetValue: mode === 'value' ? Math.max(0, rawValue) : 0,
             mode,
         };
     },
@@ -523,7 +557,8 @@ const CalculatorUI = {
         
         if (tickerInput) tickerInput.value = '';
         if (weightInput) {
-            weightInput.value = this.getAllocationMode() === 'shares' ? '10' : '25';
+            const mode = this.getAllocationMode();
+            weightInput.value = mode === 'shares' ? '10' : mode === 'value' ? '1000' : '25';
         }
     },
 
@@ -539,41 +574,50 @@ const CalculatorUI = {
 
         if (modeSelect) modeSelect.value = mode;
         if (allocationInput) {
-            allocationInput.placeholder = mode === 'shares' ? 'Target Shares' : 'Weight %';
-            allocationInput.step = mode === 'shares' ? '1' : '0.1';
+            allocationInput.placeholder = mode === 'shares'
+                ? 'Target Shares'
+                : mode === 'value'
+                ? 'Target Value $'
+                : 'Weight %';
+            allocationInput.step = mode === 'weight' ? '0.1' : '1';
             allocationInput.min = '0';
-            if (mode === 'shares') {
+            if (mode === 'weight') {
+                allocationInput.max = '100';
+                if (allocationInput.value === '' || parseFloat(allocationInput.value) === 10 || parseFloat(allocationInput.value) === 1000) {
+                    allocationInput.value = '25';
+                }
+            } else if (mode === 'shares') {
                 allocationInput.removeAttribute('max');
                 if (allocationInput.value === '' || parseFloat(allocationInput.value) === 25) {
                     allocationInput.value = '10';
                 }
             } else {
-                allocationInput.max = '100';
-                if (allocationInput.value === '' || parseFloat(allocationInput.value) === 10) {
-                    allocationInput.value = '25';
+                allocationInput.removeAttribute('max');
+                if (allocationInput.value === '' || parseFloat(allocationInput.value) === 25 || parseFloat(allocationInput.value) === 10) {
+                    allocationInput.value = '1000';
                 }
             }
         }
 
         if (leverageInput) {
-            leverageInput.readOnly = mode === 'shares';
-            leverageInput.title = mode === 'shares'
-                ? 'Auto-calculated from target shares and cash'
+            leverageInput.readOnly = mode !== 'weight';
+            leverageInput.title = mode !== 'weight'
+                ? 'Auto-calculated from target allocations and cash'
                 : '';
         }
         if (leverageHint) {
-            leverageHint.textContent = mode === 'shares'
+            leverageHint.textContent = mode !== 'weight'
                 ? 'Auto: leverage = total target value / cash (minimum 1.0x).'
-                : 'Manual in Weight mode; auto-calculated in Shares mode.';
+                : 'Manual in Weight mode; auto-calculated in Shares or Value mode.';
         }
         this.updateTotalWeight();
     },
 
     /**
-     * Update leverage display when using shares mode
+     * Update leverage display when using non-weight mode
      */
     syncLeverageForShareMode() {
-        if (this.getAllocationMode() !== 'shares') return;
+        if (this.getAllocationMode() === 'weight') return;
 
         const leverageInput = document.getElementById('leverageRate');
         if (!leverageInput) return;
@@ -600,6 +644,7 @@ const CalculatorUI = {
         // Render assets
         this.syncAllocationModeUI();
         this.renderAssetsList();
+        this.restorePersistedSession();
     },
 };
 
@@ -607,4 +652,3 @@ const CalculatorUI = {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = CalculatorUI;
 }
-

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Analysis - Portfolio Expert</title>
+
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/stat-analysis.css">
+    <link rel="stylesheet" href="css/asset-analysis.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-left">
+                <h1>📈 Portfolio Expert</h1>
+                <nav class="main-nav">
+                    <a href="asset-analysis.html" class="nav-tab active">Asset Analysis</a>
+                    <a href="stat-analysis.html" class="nav-tab">Stat Analysis</a>
+                    <a href="index.html" class="nav-tab">Backtest</a>
+                    <a href="calculator.html" class="nav-tab">Calculator</a>
+                    <a href="futures-monitor.html" class="nav-tab">Futures Monitor</a>
+                </nav>
+            </div>
+            <div class="header-right">
+                <button id="syncCalculatorBtn" class="btn btn-secondary btn-small" title="Reload assets from Calculator">
+                    <span class="icon">↻</span> Sync Calculator
+                </button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <aside class="config-panel">
+                <section class="panel-section">
+                    <h2 class="section-title">
+                        <span class="icon">📊</span>
+                        Assets
+                    </h2>
+
+                    <div class="ticker-input-group">
+                        <input
+                            type="text"
+                            id="tickerInput"
+                            placeholder="Add ticker"
+                            autocomplete="off"
+                        >
+                        <button id="addTickerBtn" class="btn btn-primary">+ Add</button>
+                    </div>
+
+                    <div id="selectedTickers" class="selected-tickers">
+                        <p class="empty-state">No calculator assets found</p>
+                    </div>
+                </section>
+
+                <section class="panel-section">
+                    <h2 class="section-title">
+                        <span class="icon">📈</span>
+                        Return Rule
+                    </h2>
+
+                    <div class="config-row">
+                        <label for="returnWindowInput">Return Window (trading days)</label>
+                        <input type="number" id="returnWindowInput" min="1" max="756" value="20">
+                    </div>
+
+                    <div class="config-row">
+                        <label for="lookbackYearsInput">History Lookback (years)</label>
+                        <input type="number" id="lookbackYearsInput" min="1" max="30" value="10">
+                    </div>
+
+                    <div class="config-row">
+                        <label for="trendDaysInput">Percentile Trend (trading days)</label>
+                        <input type="number" id="trendDaysInput" min="2" max="252" value="20">
+                    </div>
+
+                    <div class="action-buttons asset-actions">
+                        <button id="loadDataBtn" class="btn btn-secondary">
+                            <span class="icon">↓</span> Update Data
+                        </button>
+                        <button id="analyzeBtn" class="btn btn-action">
+                            <span class="icon">●</span> Analyze
+                        </button>
+                    </div>
+                </section>
+            </aside>
+
+            <section class="results-panel asset-results-panel">
+                <div id="assetTabs" class="asset-subtabs" aria-label="Asset tabs"></div>
+
+                <div id="analysisContainer" class="asset-analysis-layout" style="display: none;">
+                    <div class="asset-signal-panel panel-box">
+                        <div class="section-header">
+                            <div>
+                                <h2 id="assetTitle" class="section-title">Asset</h2>
+                                <p id="assetSubtitle" class="asset-subtitle"></p>
+                            </div>
+                            <div id="signalBadge" class="signal-badge">--</div>
+                        </div>
+
+                        <div class="signal-meter" aria-label="Current return percentile">
+                            <div class="signal-scale"></div>
+                            <div id="signalMarker" class="signal-marker" style="left: 50%;"></div>
+                            <div class="signal-labels">
+                                <span>Low</span>
+                                <span>Neutral</span>
+                                <span>High</span>
+                            </div>
+                        </div>
+
+                        <div class="metric-grid">
+                            <div class="metric-card">
+                                <span class="metric-label">Latest Price</span>
+                                <span id="latestPrice" class="metric-value">--</span>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">Current Return</span>
+                                <span id="currentReturn" class="metric-value">--</span>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">Percentile</span>
+                                <span id="currentPercentile" class="metric-value">--</span>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">Observations</span>
+                                <span id="observationCount" class="metric-value">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel-box">
+                        <div class="section-header trend-header">
+                            <div>
+                                <h2 class="section-title">
+                                    <span class="icon">↕</span>
+                                    Percentile Trend
+                                </h2>
+                                <p id="trendSubtitle" class="asset-subtitle"></p>
+                            </div>
+                            <div id="trendBadge" class="signal-badge trend-badge">--</div>
+                        </div>
+
+                        <div class="trend-summary-grid">
+                            <div class="trend-summary-item">
+                                <span class="metric-label">Start</span>
+                                <span id="trendStartPercentile" class="metric-value">--</span>
+                            </div>
+                            <div class="trend-summary-item">
+                                <span class="metric-label">Current</span>
+                                <span id="trendEndPercentile" class="metric-value">--</span>
+                            </div>
+                            <div class="trend-summary-item">
+                                <span class="metric-label">Change</span>
+                                <span id="trendPercentileChange" class="metric-value">--</span>
+                            </div>
+                        </div>
+
+                        <div id="percentileTrendChart" class="asset-chart-area trend-chart-area"></div>
+
+                        <div class="stats-table-container trend-table-container">
+                            <table id="percentileTrendTable" class="stats-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>n-Day Return</th>
+                                        <th>Percentile</th>
+                                        <th>Position</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="panel-box">
+                        <div class="section-header">
+                            <h2 class="section-title">
+                                <span class="icon">▦</span>
+                                Distribution Table
+                            </h2>
+                        </div>
+                        <div class="stats-table-container">
+                            <table id="distributionTable" class="stats-table">
+                                <thead>
+                                    <tr>
+                                        <th>Measure</th>
+                                        <th>Return</th>
+                                        <th>Meaning</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="panel-box">
+                        <div class="section-header">
+                            <h2 class="section-title">
+                                <span class="icon">▥</span>
+                                Return Distribution
+                            </h2>
+                        </div>
+                        <div id="distributionChart" class="asset-chart-area"></div>
+                    </div>
+                </div>
+
+                <div id="placeholderContainer" class="placeholder-container">
+                    <div class="placeholder-content">
+                        <span class="placeholder-icon">📊</span>
+                        <h3>Asset Price Position</h3>
+                        <p>Load calculator assets, choose an n-day return window, then analyze the current return against history.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="status-bar">
+            <div id="statusMessage" class="status-message">Ready</div>
+            <div class="status-indicator">
+                <span id="apiStatus" class="status-dot"></span>
+                <span>API</span>
+            </div>
+        </footer>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+        <p id="loadingMessage">Loading...</p>
+    </div>
+
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/asset-analysis.js"></script>
+</body>
+</html>

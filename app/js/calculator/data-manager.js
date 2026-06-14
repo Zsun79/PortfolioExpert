@@ -120,6 +120,7 @@ const DataManager = {
         }
         
         CalculatorState.dataStatus.isFresh = allFresh && tickers.length > 0;
+        CalculatorState.saveToStorage();
         return CalculatorState.dataStatus;
     },
     
@@ -140,6 +141,7 @@ const DataManager = {
         }
         
         CalculatorState.dataStatus.isUpdating = true;
+        CalculatorState.saveToStorage();
         
         let updated = 0;
         const errors = [];
@@ -160,6 +162,7 @@ const DataManager = {
         }
         
         CalculatorState.dataStatus.isUpdating = false;
+        CalculatorState.saveToStorage();
         
         // Re-check freshness after update
         await this.checkAllFreshness();
@@ -230,7 +233,7 @@ const DataManager = {
             }
         }
         
-        CalculatorState.prices = prices;
+        CalculatorState.setPrices(prices);
         return prices;
     },
     
@@ -324,4 +327,3 @@ const DataManager = {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = DataManager;
 }
-

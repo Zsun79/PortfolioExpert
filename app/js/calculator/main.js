@@ -63,7 +63,7 @@ const Calculator = {
         });
 
         document.getElementById('allocationMode')?.addEventListener('change', (e) => {
-            const mode = e.target.value === 'shares' ? 'shares' : 'weight';
+            const mode = ['shares', 'value'].includes(e.target.value) ? e.target.value : 'weight';
             CalculatorState.setAllocationMode(mode);
             CalculatorUI.renderAssetsList();
             CalculatorUI.syncAllocationModeUI();
@@ -124,7 +124,7 @@ const Calculator = {
      * Add a new asset
      */
     async addAsset() {
-        const { ticker, weight, targetShares, mode } = CalculatorUI.getNewAssetInput();
+        const { ticker, weight, targetShares, targetValue, mode } = CalculatorUI.getNewAssetInput();
         
         if (!ticker) {
             CalculatorUI.toast('Please enter a ticker symbol', 'error');
@@ -134,6 +134,11 @@ const Calculator = {
         if (mode === 'shares') {
             if (targetShares <= 0) {
                 CalculatorUI.toast('Please enter a valid target share count', 'error');
+                return;
+            }
+        } else if (mode === 'value') {
+            if (targetValue <= 0) {
+                CalculatorUI.toast('Please enter a valid target value', 'error');
                 return;
             }
         } else if (weight <= 0) {
@@ -148,7 +153,7 @@ const Calculator = {
         }
         
         // Add to state
-        CalculatorState.addAsset(ticker, weight, 0, targetShares);
+        CalculatorState.addAsset(ticker, weight, 0, targetShares, targetValue);
         
         // Clear input
         CalculatorUI.clearNewAssetInput();
@@ -202,7 +207,19 @@ const Calculator = {
     onTargetSharesChange(ticker, value) {
         const shares = parseInt(value, 10) || 0;
         CalculatorState.updateTargetShares(ticker, shares);
-        CalculatorUI.updateTotalWeight();
+        CalculatorUI.renderAssetsList();
+        CalculatorUI.syncLeverageForShareMode();
+    },
+
+    /**
+     * Handle target value change from input
+     * @param {string} ticker - Ticker symbol
+     * @param {string} value - New target value
+     */
+    onTargetValueChange(ticker, value) {
+        const targetValue = parseFloat(value) || 0;
+        CalculatorState.updateTargetValue(ticker, targetValue);
+        CalculatorUI.renderAssetsList();
         CalculatorUI.syncLeverageForShareMode();
     },
     
@@ -273,10 +290,13 @@ const Calculator = {
             }
 
             let positionOptions = {};
-            if (CalculatorUI.getAllocationMode() === 'shares') {
+            if (CalculatorUI.getAllocationMode() !== 'weight') {
                 const shareMode = CalculatorState.getShareModePortfolio();
                 if (shareMode.totalTargetValue <= 0) {
-                    CalculatorUI.toast('Enter target shares greater than 0 for at least one asset', 'error');
+                    const message = CalculatorUI.getAllocationMode() === 'value'
+                        ? 'Enter target values greater than 0 for at least one asset'
+                        : 'Enter target shares greater than 0 for at least one asset';
+                    CalculatorUI.toast(message, 'error');
                     return;
                 }
                 Object.entries(shareMode.weights).forEach(([ticker, weight]) => {
@@ -288,10 +308,7 @@ const Calculator = {
                     weights: shareMode.weights,
                     leverageRate: shareMode.leverageRate,
                     effectiveBuyingPower: shareMode.totalTargetValue,
-                    explicitTargetShares: CalculatorState.assets.reduce((acc, asset) => {
-                        acc[asset.ticker] = Math.max(0, Math.round(asset.targetShares || 0));
-                        return acc;
-                    }, {}),
+                    explicitTargetShares: shareMode.explicitTargetShares,
                 };
             } else {
                 // Check total weight for weight mode
@@ -308,8 +325,6 @@ const Calculator = {
             
             // Render position results
             CalculatorUI.renderPositionSummary(positions);
-            CalculatorUI.renderTradeOrders(orders);
-            
             // Calculate risk metrics
             CalculatorUI.showLoading('Analyzing risk...');
             const riskMetrics = await RiskAnalysis.analyze();
@@ -346,4 +361,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Export for global access
 window.Calculator = Calculator;
-
