@@ -87,14 +87,14 @@ const Projection = {
      * @returns {Object} Projections keyed by days
      */
     calculateAll() {
-        const riskMetrics = CalculatorState.results.riskMetrics;
+        const riskMetrics = PortfolioWatcherState.results.riskMetrics;
         if (!riskMetrics) {
             console.warn('Risk metrics not available for projection');
             return null;
         }
         
-        const baseCash = CalculatorState.config.targetCash;
-        const leverageRate = CalculatorState.config.leverageRate || 1;
+        const baseCash = PortfolioWatcherState.config.targetCash;
+        const leverageRate = PortfolioWatcherState.config.leverageRate || 1;
         
         const projections = {};
         
@@ -118,11 +118,11 @@ const Projection = {
      * @returns {Object} Continuous projection data with daily values
      */
     calculateContinuous() {
-        const riskMetrics = CalculatorState.results.riskMetrics;
+        const riskMetrics = PortfolioWatcherState.results.riskMetrics;
         if (!riskMetrics) return null;
         
-        const baseCash = CalculatorState.config.targetCash;
-        const leverageRate = CalculatorState.config.leverageRate || 1;
+        const baseCash = PortfolioWatcherState.config.targetCash;
+        const leverageRate = PortfolioWatcherState.config.leverageRate || 1;
         const leveragedDailyReturn = riskMetrics.baseDailyReturn * leverageRate;
         // Leveraged daily volatility (amplified by leverage)
         const leveragedDailyStd = riskMetrics.baseDailyVolatility * leverageRate;
@@ -309,7 +309,7 @@ const Projection = {
         if (!projections) return null;
         
         // Store in state (use 1 year / 252 trading days for main projection)
-        CalculatorState.setResult('projection', projections[252]);
+        PortfolioWatcherState.setResult('projection', projections[252]);
         
         // Render continuous chart
         this.renderContinuousChart();

@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Calculator</title>
+    <title>Portfolio Watcher</title>
     
     <!-- Shared Styles -->
     <link rel="stylesheet" href="css/styles.css">
-    <!-- Calculator-specific Styles -->
-    <link rel="stylesheet" href="css/calculator.css">
+    <!-- Portfolio Watcher-specific Styles -->
+    <link rel="stylesheet" href="css/portfolio-watcher.css">
     
     <!-- Flatpickr for date picking -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -24,7 +24,7 @@
                     <a href="asset-analysis.html" class="nav-tab">Asset Analysis</a>
                     <a href="stat-analysis.html" class="nav-tab">Stat Analysis</a>
                     <a href="index.html" class="nav-tab">Backtest</a>
-                    <a href="calculator.html" class="nav-tab active">Calculator</a>
+                    <a href="portfolio-watcher.html" class="nav-tab active">Portfolio Watcher</a>
                     <a href="futures-monitor.html" class="nav-tab">Futures Monitor</a>
                 </nav>
             </div>
@@ -105,7 +105,7 @@
                 
                 <!-- Current Holdings (Optional) -->
                 <section class="panel-section collapsible">
-                    <h2 class="section-title toggle-section" onclick="Calculator.toggleSection('holdingsSection')">
+                    <h2 class="section-title toggle-section" onclick="PortfolioWatcher.toggleSection('holdingsSection')">
                         <span class="icon">📦</span>
                         Current Holdings
                         <span class="toggle-icon">▼</span>
@@ -295,13 +295,13 @@
     <script src="js/utils.js"></script>
     <script src="js/api.js"></script>
     
-    <!-- Calculator modules -->
-    <script src="js/calculator/state.js"></script>
-    <script src="js/calculator/data-manager.js"></script>
-    <script src="js/calculator/position-calc.js"></script>
-    <script src="js/calculator/risk-analysis.js"></script>
-    <script src="js/calculator/projection.js"></script>
-    <script src="js/calculator/ui.js"></script>
-    <script src="js/calculator/main.js"></script>
+    <!-- Portfolio Watcher modules -->
+    <script src="js/portfolio-watcher/state.js"></script>
+    <script src="js/portfolio-watcher/data-manager.js"></script>
+    <script src="js/portfolio-watcher/position-sizer.js"></script>
+    <script src="js/portfolio-watcher/risk-analysis.js"></script>
+    <script src="js/portfolio-watcher/projection.js"></script>
+    <script src="js/portfolio-watcher/ui.js"></script>
+    <script src="js/portfolio-watcher/main.js"></script>
 </body>
 </html>

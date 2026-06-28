@@ -1,9 +1,9 @@
 /**
- * Position Calculator
+ * Position Sizer
  * Calculates target positions and trade orders
  */
 
-const PositionCalculator = {
+const PositionSizer = {
     /**
      * Calculate target positions for the portfolio
      * @param {number} targetCash - Total portfolio value
@@ -140,11 +140,11 @@ const PositionCalculator = {
      * @returns {Object} {positions, orders}
      */
     calculate(options = {}) {
-        const targetCash = CalculatorState.config.targetCash;
-        const leverageRate = options.leverageRate || CalculatorState.config.leverageRate || 1;
-        const weights = options.weights || CalculatorState.getWeights();
-        const prices = CalculatorState.prices;
-        const holdings = CalculatorState.getCurrentHoldings();
+        const targetCash = PortfolioWatcherState.config.targetCash;
+        const leverageRate = options.leverageRate || PortfolioWatcherState.config.leverageRate || 1;
+        const weights = options.weights || PortfolioWatcherState.getWeights();
+        const prices = PortfolioWatcherState.prices;
+        const holdings = PortfolioWatcherState.getCurrentHoldings();
         
         // Apply leverage to get effective buying power
         const leveragedCash = options.effectiveBuyingPower || (targetCash * leverageRate);
@@ -161,8 +161,8 @@ const PositionCalculator = {
         const orders = this.calculateTradeOrders(positions, holdings);
         
         // Store in state
-        CalculatorState.setResult('positions', positions);
-        CalculatorState.setResult('tradeOrders', orders);
+        PortfolioWatcherState.setResult('positions', positions);
+        PortfolioWatcherState.setResult('tradeOrders', orders);
         
         return { positions, orders };
     },
@@ -170,5 +170,5 @@ const PositionCalculator = {
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = PositionCalculator;
+    module.exports = PositionSizer;
 }

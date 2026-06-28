@@ -1,6 +1,6 @@
 /* ============================================================================
-   Portfolio Calculator - Stylesheet
-   Extends the base styles.css for calculator-specific components
+   Portfolio Watcher - Stylesheet
+   Extends the base styles.css for Portfolio Watcher-specific components
    ============================================================================ */
 
 /* --------------------------------------------------------------------------
@@ -39,7 +39,7 @@
 }
 
 /* --------------------------------------------------------------------------
-   Calculator Layout
+   Portfolio Watcher Layout
    -------------------------------------------------------------------------- */
 .calc-main-content {
     display: flex;

@@ -1,5 +1,5 @@
 /**
- * Data Manager for Portfolio Calculator
+ * Data Manager for Portfolio Watcher
  * Handles data freshness detection and auto-update
  */
 
@@ -84,11 +84,11 @@ const DataManager = {
      * @returns {Promise<Object>} Freshness status for each ticker
      */
     async checkAllFreshness() {
-        const tickers = CalculatorState.getTickers();
+        const tickers = PortfolioWatcherState.getTickers();
         const latestTradingDay = this.getLatestTradingDay();
         
-        CalculatorState.dataStatus.lastChecked = new Date().toISOString();
-        CalculatorState.dataStatus.tickerStatus = {};
+        PortfolioWatcherState.dataStatus.lastChecked = new Date().toISOString();
+        PortfolioWatcherState.dataStatus.tickerStatus = {};
         
         let allFresh = true;
         
@@ -98,7 +98,7 @@ const DataManager = {
                 const lastDate = range.last_date;
                 const isFresh = lastDate >= latestTradingDay;
                 
-                CalculatorState.dataStatus.tickerStatus[ticker] = {
+                PortfolioWatcherState.dataStatus.tickerStatus[ticker] = {
                     lastDate,
                     isFresh,
                     latestTradingDay,
@@ -109,7 +109,7 @@ const DataManager = {
                 }
             } catch (e) {
                 // Ticker not in cache
-                CalculatorState.dataStatus.tickerStatus[ticker] = {
+                PortfolioWatcherState.dataStatus.tickerStatus[ticker] = {
                     lastDate: null,
                     isFresh: false,
                     latestTradingDay,
@@ -119,9 +119,9 @@ const DataManager = {
             }
         }
         
-        CalculatorState.dataStatus.isFresh = allFresh && tickers.length > 0;
-        CalculatorState.saveToStorage();
-        return CalculatorState.dataStatus;
+        PortfolioWatcherState.dataStatus.isFresh = allFresh && tickers.length > 0;
+        PortfolioWatcherState.saveToStorage();
+        return PortfolioWatcherState.dataStatus;
     },
     
     /**
@@ -130,9 +130,9 @@ const DataManager = {
      * @returns {Promise<Object>} Update results
      */
     async updateStaleData(onProgress = null) {
-        const tickers = CalculatorState.getTickers();
+        const tickers = PortfolioWatcherState.getTickers();
         const stale = tickers.filter(t => {
-            const status = CalculatorState.dataStatus.tickerStatus[t];
+            const status = PortfolioWatcherState.dataStatus.tickerStatus[t];
             return !status || !status.isFresh;
         });
         
@@ -140,8 +140,8 @@ const DataManager = {
             return { updated: 0, errors: [] };
         }
         
-        CalculatorState.dataStatus.isUpdating = true;
-        CalculatorState.saveToStorage();
+        PortfolioWatcherState.dataStatus.isUpdating = true;
+        PortfolioWatcherState.saveToStorage();
         
         let updated = 0;
         const errors = [];
@@ -161,8 +161,8 @@ const DataManager = {
             }
         }
         
-        CalculatorState.dataStatus.isUpdating = false;
-        CalculatorState.saveToStorage();
+        PortfolioWatcherState.dataStatus.isUpdating = false;
+        PortfolioWatcherState.saveToStorage();
         
         // Re-check freshness after update
         await this.checkAllFreshness();
@@ -179,7 +179,7 @@ const DataManager = {
      * @returns {Promise<Object>} Prices by ticker
      */
     async fetchLatestPrices() {
-        const tickers = CalculatorState.getTickers();
+        const tickers = PortfolioWatcherState.getTickers();
         const prices = {};
         const endDate = this.getLatestTradingDay();
         const fallbackStartDate = new Date(endDate);
@@ -233,7 +233,7 @@ const DataManager = {
             }
         }
         
-        CalculatorState.setPrices(prices);
+        PortfolioWatcherState.setPrices(prices);
         return prices;
     },
     
@@ -243,7 +243,7 @@ const DataManager = {
      * @returns {Promise<Object>} Historical prices by ticker
      */
     async fetchHistoricalPrices(days = 252) {
-        const tickers = CalculatorState.getTickers();
+        const tickers = PortfolioWatcherState.getTickers();
         const history = {};
         
         // Calculate start date
@@ -282,7 +282,7 @@ const DataManager = {
                 const latest = response.data[response.data.length - 1];
                 // Convert from percentage to decimal
                 const rate = latest.rate / 100;
-                CalculatorState.setRiskFreeRate(rate);
+                PortfolioWatcherState.setRiskFreeRate(rate);
                 return rate;
             }
         } catch (e) {
@@ -291,7 +291,7 @@ const DataManager = {
         
         // Default fallback
         const defaultRate = 0.05;
-        CalculatorState.setRiskFreeRate(defaultRate);
+        PortfolioWatcherState.setRiskFreeRate(defaultRate);
         return defaultRate;
     },
     
@@ -309,7 +309,7 @@ const DataManager = {
         await this.checkAllFreshness();
         
         // Update stale data if any
-        if (!CalculatorState.dataStatus.isFresh) {
+        if (!PortfolioWatcherState.dataStatus.isFresh) {
             await this.updateStaleData(onProgress);
         }
         
@@ -319,7 +319,7 @@ const DataManager = {
         // Fetch risk-free rate
         await this.fetchRiskFreeRate();
         
-        return CalculatorState.dataStatus;
+        return PortfolioWatcherState.dataStatus;
     },
 };
 

@@ -18,13 +18,13 @@
                     <a href="asset-analysis.html" class="nav-tab active">Asset Analysis</a>
                     <a href="stat-analysis.html" class="nav-tab">Stat Analysis</a>
                     <a href="index.html" class="nav-tab">Backtest</a>
-                    <a href="calculator.html" class="nav-tab">Calculator</a>
+                    <a href="portfolio-watcher.html" class="nav-tab">Portfolio Watcher</a>
                     <a href="futures-monitor.html" class="nav-tab">Futures Monitor</a>
                 </nav>
             </div>
             <div class="header-right">
-                <button id="syncCalculatorBtn" class="btn btn-secondary btn-small" title="Reload assets from Calculator">
-                    <span class="icon">↻</span> Sync Calculator
+                <button id="syncPortfolioWatcherBtn" class="btn btn-secondary btn-small" title="Reload assets from Portfolio Watcher">
+                    <span class="icon">↻</span> Sync Portfolio Watcher
                 </button>
             </div>
         </header>
@@ -48,7 +48,7 @@
                     </div>
 
                     <div id="selectedTickers" class="selected-tickers">
-                        <p class="empty-state">No calculator assets found</p>
+                        <p class="empty-state">No Portfolio Watcher assets found</p>
                     </div>
                 </section>
 
@@ -70,7 +70,12 @@
 
                     <div class="config-row">
                         <label for="trendDaysInput">Percentile Trend (trading days)</label>
-                        <input type="number" id="trendDaysInput" min="2" max="252" value="20">
+                        <input type="number" id="trendDaysInput" min="2" value="20">
+                    </div>
+
+                    <div class="config-row">
+                        <label for="forwardDaysInput">Forward Return (trading days)</label>
+                        <input type="number" id="forwardDaysInput" min="1" value="30">
                     </div>
 
                     <div class="action-buttons asset-actions">
@@ -136,7 +141,12 @@
                                 </h2>
                                 <p id="trendSubtitle" class="asset-subtitle"></p>
                             </div>
-                            <div id="trendBadge" class="signal-badge trend-badge">--</div>
+                            <div class="trend-header-actions">
+                                <button id="trendResetZoomBtn" class="btn btn-secondary btn-sm" title="Reset chart zoom">
+                                    <span class="icon">⤢</span> Reset Zoom
+                                </button>
+                                <div id="trendBadge" class="signal-badge trend-badge">--</div>
+                            </div>
                         </div>
 
                         <div class="trend-summary-grid">
@@ -163,6 +173,7 @@
                                         <th>Date</th>
                                         <th>n-Day Return</th>
                                         <th>Percentile</th>
+                                        <th>Fwd Return</th>
                                         <th>Position</th>
                                     </tr>
                                 </thead>
@@ -207,7 +218,7 @@
                     <div class="placeholder-content">
                         <span class="placeholder-icon">📊</span>
                         <h3>Asset Price Position</h3>
-                        <p>Load calculator assets, choose an n-day return window, then analyze the current return against history.</p>
+                        <p>Load Portfolio Watcher assets, choose an n-day return window, then analyze the current return against history.</p>
                     </div>
                 </div>
             </section>

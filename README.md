@@ -33,7 +33,7 @@ All running locally on your machine with automatic data caching — no subscript
 | **Interactive Charts** | Zoom, pan, and export Plotly.js visualizations |
 | **Save Strategies** | Store and reload your portfolio configurations |
 
-### 🧮 Calculator Tool
+### 🧮 Portfolio Watcher Tool
 
 | Feature | Description |
 |---------|-------------|
@@ -93,7 +93,7 @@ open app/index.html
 PortfolioExpert/
 ├── app/                        # Frontend application
 │   ├── index.html              # Backtest tool
-│   ├── calculator.html         # Position calculator
+│   ├── portfolio-watcher.html  # Portfolio Watcher (position sizing)
 │   ├── css/                    # Stylesheets
 │   └── js/                     # Application logic
 │

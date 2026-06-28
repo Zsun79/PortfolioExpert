@@ -31,7 +31,7 @@ const App = {
     // LocalStorage key
     STORAGE_KEY: 'portfolioViewer_state',
     MONITOR_STORAGE_KEY: 'futuresMonitor_portfolio',
-    CALCULATOR_STORAGE_KEY: 'portfolioCalculator_state',
+    PORTFOLIO_WATCHER_STORAGE_KEY: 'portfolioCalculator_state',
     
     /**
      * Initialize the application
@@ -186,7 +186,7 @@ const App = {
         // Data buttons
         document.getElementById('loadDataBtn').addEventListener('click', () => this.loadAllData());
         document.getElementById('updateAllBtn').addEventListener('click', () => this.updateAllData());
-        document.getElementById('importCalculatorBtn')?.addEventListener('click', () => this.importFromCalculator());
+        document.getElementById('importPortfolioWatcherBtn')?.addEventListener('click', () => this.importFromPortfolioWatcher());
         
         // Backtest button
         document.getElementById('runBacktestBtn').addEventListener('click', () => this.runBacktest());
@@ -360,13 +360,13 @@ const App = {
     },
 
     /**
-     * Import calculator portfolio using fixed shares and latest calculator prices
+     * Import portfolio using fixed shares and latest portfolio prices
      */
-    importFromCalculator() {
+    importFromPortfolioWatcher() {
         try {
-            const saved = localStorage.getItem(this.CALCULATOR_STORAGE_KEY);
+            const saved = localStorage.getItem(this.PORTFOLIO_WATCHER_STORAGE_KEY);
             if (!saved) {
-                Utils.toast('No calculator portfolio found', 'info');
+                Utils.toast('No portfolio found', 'info');
                 return;
             }
 
@@ -394,13 +394,13 @@ const App = {
                 .filter(position => position.ticker && position.shares > 0 && position.value > 0);
 
             if (positions.length === 0) {
-                Utils.toast('No calculator positions with shares and prices found', 'info');
+                Utils.toast('No portfolio positions with shares and prices found', 'info');
                 return;
             }
 
             const totalValue = positions.reduce((sum, position) => sum + position.value, 0);
             if (!(totalValue > 0)) {
-                Utils.toast('Calculator portfolio total value is zero', 'error');
+                Utils.toast('Portfolio total value is zero', 'error');
                 return;
             }
 
@@ -415,10 +415,10 @@ const App = {
             this.updateBacktestButton();
             this.saveStateToStorage();
 
-            Utils.toast(`Imported ${positions.length} calculator positions by share`, 'success');
+            Utils.toast(`Imported ${positions.length} portfolio positions by share`, 'success');
         } catch (error) {
-            console.error('Failed to import calculator portfolio:', error);
-            Utils.toast('Failed to import calculator portfolio', 'error');
+            console.error('Failed to import portfolio:', error);
+            Utils.toast('Failed to import portfolio', 'error');
         }
     },
     

@@ -1,9 +1,9 @@
 /**
- * Calculator State Management
- * Manages the state for the portfolio calculator including assets, config, and results
+ * Portfolio Watcher State Management
+ * Manages the state for Portfolio Watcher including assets, config, and results
  */
 
-const CalculatorState = {
+const PortfolioWatcherState = {
     // Storage key for persistence
     STORAGE_KEY: 'portfolioCalculator_state',
     STORAGE_VERSION: 2,
@@ -332,7 +332,7 @@ const CalculatorState = {
             };
             localStorage.setItem(this.STORAGE_KEY, JSON.stringify(state));
         } catch (e) {
-            console.warn('Failed to save calculator state:', e);
+            console.warn('Failed to save Portfolio Watcher state:', e);
         }
     },
     
@@ -377,7 +377,7 @@ const CalculatorState = {
                 return true;
             }
         } catch (e) {
-            console.warn('Failed to load calculator state:', e);
+            console.warn('Failed to load Portfolio Watcher state:', e);
         }
         return false;
     },
@@ -502,5 +502,5 @@ const CalculatorState = {
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = CalculatorState;
+    module.exports = PortfolioWatcherState;
 }

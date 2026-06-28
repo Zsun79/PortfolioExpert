@@ -1,9 +1,9 @@
 /**
- * UI Manager for Portfolio Calculator
+ * UI Manager for Portfolio Watcher
  * Handles all UI rendering and interactions
  */
 
-const CalculatorUI = {
+const PortfolioWatcherUI = {
     // =========================================================================
     // Data Status
     // =========================================================================
@@ -24,7 +24,7 @@ const CalculatorUI = {
             textEl.textContent = text;
         }
 
-        CalculatorState.setUiState({
+        PortfolioWatcherState.setUiState({
             dataStatus: { status, text },
         });
     },
@@ -38,7 +38,7 @@ const CalculatorUI = {
      */
     renderAssetsList() {
         const container = document.getElementById('assetsList');
-        const assets = CalculatorState.assets;
+        const assets = PortfolioWatcherState.assets;
         const mode = this.getAllocationMode();
         
         if (assets.length === 0) {
@@ -49,7 +49,7 @@ const CalculatorUI = {
         }
         
         container.innerHTML = assets.map(asset => {
-            const price = CalculatorState.prices[asset.ticker];
+            const price = PortfolioWatcherState.prices[asset.ticker];
             const hasValidPrice = Number.isFinite(price?.price);
             const priceStr = hasValidPrice ? `$${price.price.toFixed(2)}` : 'Loading...';
             const derivedTargetValue = hasValidPrice
@@ -70,7 +70,7 @@ const CalculatorUI = {
                     <input type="number" class="asset-weight-input" 
                            value="${(asset.weight * 100).toFixed(1)}" 
                            min="0" max="100" step="0.1"
-                           onchange="Calculator.onWeightChange('${asset.ticker}', this.value)">
+                           onchange="PortfolioWatcher.onWeightChange('${asset.ticker}', this.value)">
                     <span>%</span>
                 `
                 : mode === 'shares'
@@ -78,14 +78,14 @@ const CalculatorUI = {
                     <input type="number" class="asset-weight-input" 
                            value="${derivedTargetShares}" 
                            min="0" step="1"
-                           onchange="Calculator.onTargetSharesChange('${asset.ticker}', this.value)">
+                           onchange="PortfolioWatcher.onTargetSharesChange('${asset.ticker}', this.value)">
                     <span>sh</span>
                 `
                 : `
                     <input type="number" class="asset-weight-input" 
                            value="${derivedTargetValue}" 
                            min="0" step="1"
-                           onchange="Calculator.onTargetValueChange('${asset.ticker}', this.value)">
+                           onchange="PortfolioWatcher.onTargetValueChange('${asset.ticker}', this.value)">
                     <span>$</span>
                 `;
             
@@ -94,7 +94,7 @@ const CalculatorUI = {
                     <span class="asset-ticker">${asset.ticker}</span>
                     ${allocationInput}
                     <span class="asset-price">${priceStr}</span>
-                    <button class="remove-asset-btn" onclick="Calculator.removeAsset('${asset.ticker}')">&times;</button>
+                    <button class="remove-asset-btn" onclick="PortfolioWatcher.removeAsset('${asset.ticker}')">&times;</button>
                 </div>
             `;
         }).join('');
@@ -116,7 +116,7 @@ const CalculatorUI = {
         if (!totalEl) return;
         
         if (mode === 'shares' || mode === 'value') {
-            const { totalTargetValue } = CalculatorState.getShareModePortfolio();
+            const { totalTargetValue } = PortfolioWatcherState.getShareModePortfolio();
             if (labelEl) {
                 labelEl.textContent = 'Total Target Value:';
             }
@@ -125,7 +125,7 @@ const CalculatorUI = {
             return;
         }
 
-        const total = CalculatorState.getTotalWeight();
+        const total = PortfolioWatcherState.getTotalWeight();
         const percentage = (total * 100).toFixed(1);
         
         if (labelEl) {
@@ -140,7 +140,7 @@ const CalculatorUI = {
      */
     renderHoldingsList() {
         const container = document.getElementById('holdingsList');
-        const assets = CalculatorState.assets;
+        const assets = PortfolioWatcherState.assets;
         
         if (assets.length === 0) {
             container.innerHTML = '<p class="empty-state">Add assets first</p>';
@@ -153,7 +153,7 @@ const CalculatorUI = {
                 <input type="number" class="holding-input" 
                        value="${asset.currentShares}" 
                        min="0" step="1"
-                       onchange="Calculator.onHoldingChange('${asset.ticker}', this.value)">
+                       onchange="PortfolioWatcher.onHoldingChange('${asset.ticker}', this.value)">
                 <span>shares</span>
             </div>
         `).join('');
@@ -424,7 +424,7 @@ const CalculatorUI = {
     updateStatus(text) {
         const statusEl = document.getElementById('statusText');
         if (statusEl) statusEl.textContent = text;
-        CalculatorState.setUiState({ statusText: text });
+        PortfolioWatcherState.setUiState({ statusText: text });
     },
     
     /**
@@ -435,14 +435,14 @@ const CalculatorUI = {
         if (el) {
             el.textContent = 'Last calculated: ' + new Date(timestamp).toLocaleTimeString();
         }
-        CalculatorState.setUiState({ lastCalculatedAt: timestamp });
+        PortfolioWatcherState.setUiState({ lastCalculatedAt: timestamp });
     },
 
     /**
      * Restore persisted footer, status, and result cards
      */
     restorePersistedSession() {
-        const persistedDataStatus = CalculatorState.ui?.dataStatus;
+        const persistedDataStatus = PortfolioWatcherState.ui?.dataStatus;
         if (persistedDataStatus?.status && persistedDataStatus?.text) {
             const icon = document.getElementById('dataStatusIcon');
             const textEl = document.getElementById('dataStatusText');
@@ -456,15 +456,15 @@ const CalculatorUI = {
 
         const statusEl = document.getElementById('statusText');
         if (statusEl) {
-            statusEl.textContent = CalculatorState.ui?.statusText || 'Ready';
+            statusEl.textContent = PortfolioWatcherState.ui?.statusText || 'Ready';
         }
 
-        const lastCalculatedAt = CalculatorState.ui?.lastCalculatedAt;
+        const lastCalculatedAt = PortfolioWatcherState.ui?.lastCalculatedAt;
         if (lastCalculatedAt) {
             this.updateLastCalculated(lastCalculatedAt);
         }
 
-        const { positions, riskMetrics, projection } = CalculatorState.results;
+        const { positions, riskMetrics, projection } = PortfolioWatcherState.results;
         if (positions) this.renderPositionSummary(positions);
         if (riskMetrics) this.renderRiskMetrics(riskMetrics);
 
@@ -524,8 +524,8 @@ const CalculatorUI = {
      * @returns {string} 'weight', 'shares', or 'value'
      */
     getAllocationMode() {
-        return ['shares', 'value'].includes(CalculatorState.config.allocationMode)
-            ? CalculatorState.config.allocationMode
+        return ['shares', 'value'].includes(PortfolioWatcherState.config.allocationMode)
+            ? PortfolioWatcherState.config.allocationMode
             : 'weight';
     },
     
@@ -622,7 +622,7 @@ const CalculatorUI = {
         const leverageInput = document.getElementById('leverageRate');
         if (!leverageInput) return;
 
-        const { leverageRate } = CalculatorState.getShareModePortfolio();
+        const { leverageRate } = PortfolioWatcherState.getShareModePortfolio();
         leverageInput.value = leverageRate.toFixed(2);
     },
     
@@ -636,9 +636,9 @@ const CalculatorUI = {
         const leverageInput = document.getElementById('leverageRate');
         const allocationModeInput = document.getElementById('allocationMode');
         
-        if (targetInput) targetInput.value = CalculatorState.config.targetCash;
-        if (lookbackInput) lookbackInput.value = CalculatorState.config.lookbackWindow;
-        if (leverageInput) leverageInput.value = CalculatorState.config.leverageRate || 1;
+        if (targetInput) targetInput.value = PortfolioWatcherState.config.targetCash;
+        if (lookbackInput) lookbackInput.value = PortfolioWatcherState.config.lookbackWindow;
+        if (leverageInput) leverageInput.value = PortfolioWatcherState.config.leverageRate || 1;
         if (allocationModeInput) allocationModeInput.value = this.getAllocationMode();
         
         // Render assets
@@ -650,5 +650,5 @@ const CalculatorUI = {
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = CalculatorUI;
+    module.exports = PortfolioWatcherUI;
 }

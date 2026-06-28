@@ -3,7 +3,7 @@
  */
 
 const AssetAnalysis = {
-    CALCULATOR_STORAGE_KEY: 'portfolioCalculator_state',
+    PORTFOLIO_WATCHER_STORAGE_KEY: 'portfolioCalculator_state',
     STORAGE_KEY: 'assetAnalysis_state',
 
     state: {
@@ -12,6 +12,7 @@ const AssetAnalysis = {
         returnWindow: 20,
         lookbackYears: 10,
         trendDays: 20,
+        forwardDays: 30,
         analyses: {},
     },
 
@@ -32,8 +33,8 @@ const AssetAnalysis = {
     },
 
     bindEvents() {
-        document.getElementById('syncCalculatorBtn')?.addEventListener('click', () => {
-            this.syncFromCalculator(true);
+        document.getElementById('syncPortfolioWatcherBtn')?.addEventListener('click', () => {
+            this.syncFromPortfolioWatcher(true);
             this.analyzeAll();
         });
 
@@ -53,31 +54,39 @@ const AssetAnalysis = {
         });
 
         document.getElementById('trendDaysInput')?.addEventListener('change', (event) => {
-            this.state.trendDays = this.clampInteger(event.target.value, 2, 252, 20);
+            this.state.trendDays = this.clampInteger(event.target.value, 2, Infinity, 20);
+            this.saveState();
+        });
+
+        document.getElementById('forwardDaysInput')?.addEventListener('change', (event) => {
+            this.state.forwardDays = this.clampInteger(event.target.value, 1, Infinity, 30);
             this.saveState();
         });
 
         document.getElementById('loadDataBtn')?.addEventListener('click', () => this.updateDataAndAnalyze());
         document.getElementById('analyzeBtn')?.addEventListener('click', () => this.analyzeAll());
+        document.getElementById('trendResetZoomBtn')?.addEventListener('click', () => this.resetTrendZoom());
     },
 
     loadState() {
-        const calculatorDefaults = this.getCalculatorDefaults();
+        const watcherDefaults = this.getPortfolioWatcherDefaults();
 
         try {
             const saved = JSON.parse(localStorage.getItem(this.STORAGE_KEY) || '{}');
             this.state.tickers = Array.isArray(saved.tickers) && saved.tickers.length
                 ? saved.tickers
-                : calculatorDefaults.tickers;
-            this.state.returnWindow = saved.returnWindow || calculatorDefaults.returnWindow || 20;
+                : watcherDefaults.tickers;
+            this.state.returnWindow = saved.returnWindow || watcherDefaults.returnWindow || 20;
             this.state.lookbackYears = saved.lookbackYears || 10;
             this.state.trendDays = saved.trendDays || 20;
+            this.state.forwardDays = saved.forwardDays || 30;
             this.state.activeTicker = saved.activeTicker || this.state.tickers[0] || null;
         } catch (error) {
             console.warn('Failed to load asset analysis state:', error);
-            this.state.tickers = calculatorDefaults.tickers;
-            this.state.returnWindow = calculatorDefaults.returnWindow || 20;
+            this.state.tickers = watcherDefaults.tickers;
+            this.state.returnWindow = watcherDefaults.returnWindow || 20;
             this.state.trendDays = 20;
+            this.state.forwardDays = 30;
             this.state.activeTicker = this.state.tickers[0] || null;
         }
     },
@@ -89,12 +98,13 @@ const AssetAnalysis = {
             returnWindow: this.state.returnWindow,
             lookbackYears: this.state.lookbackYears,
             trendDays: this.state.trendDays,
+            forwardDays: this.state.forwardDays,
         }));
     },
 
-    getCalculatorDefaults() {
+    getPortfolioWatcherDefaults() {
         try {
-            const parsed = JSON.parse(localStorage.getItem(this.CALCULATOR_STORAGE_KEY) || '{}');
+            const parsed = JSON.parse(localStorage.getItem(this.PORTFOLIO_WATCHER_STORAGE_KEY) || '{}');
             const tickers = (parsed.assets || [])
                 .map(asset => asset.ticker)
                 .filter(Boolean);
@@ -104,13 +114,13 @@ const AssetAnalysis = {
                 returnWindow: parsed.config?.lookbackWindow,
             };
         } catch (error) {
-            console.warn('Failed to read calculator assets:', error);
+            console.warn('Failed to read Portfolio Watcher assets:', error);
             return { tickers: [], returnWindow: 20 };
         }
     },
 
-    syncFromCalculator(showToast = false) {
-        const defaults = this.getCalculatorDefaults();
+    syncFromPortfolioWatcher(showToast = false) {
+        const defaults = this.getPortfolioWatcherDefaults();
         this.state.tickers = defaults.tickers;
         this.state.returnWindow = defaults.returnWindow || this.state.returnWindow;
         this.state.activeTicker = this.state.tickers[0] || null;
@@ -123,8 +133,8 @@ const AssetAnalysis = {
         if (showToast) {
             Utils.toast(
                 this.state.tickers.length
-                    ? `Loaded ${this.state.tickers.length} calculator assets`
-                    : 'No assets found in Calculator',
+                    ? `Loaded ${this.state.tickers.length} Portfolio Watcher assets`
+                    : 'No assets found in Portfolio Watcher',
                 'info'
             );
         }
@@ -134,9 +144,11 @@ const AssetAnalysis = {
         const returnWindow = document.getElementById('returnWindowInput');
         const lookbackYears = document.getElementById('lookbackYearsInput');
         const trendDays = document.getElementById('trendDaysInput');
+        const forwardDays = document.getElementById('forwardDaysInput');
         if (returnWindow) returnWindow.value = this.state.returnWindow;
         if (lookbackYears) lookbackYears.value = this.state.lookbackYears;
         if (trendDays) trendDays.value = this.state.trendDays;
+        if (forwardDays) forwardDays.value = this.state.forwardDays;
     },
 
     addTicker() {
@@ -180,7 +192,7 @@ const AssetAnalysis = {
         if (!container) return;
 
         if (this.state.tickers.length === 0) {
-            container.innerHTML = '<p class="empty-state">No calculator assets found</p>';
+            container.innerHTML = '<p class="empty-state">No Portfolio Watcher assets found</p>';
             return;
         }
 
@@ -256,8 +268,14 @@ const AssetAnalysis = {
             this.state.trendDays = this.clampInteger(
                 document.getElementById('trendDaysInput')?.value,
                 2,
-                252,
+                Infinity,
                 this.state.trendDays
+            );
+            this.state.forwardDays = this.clampInteger(
+                document.getElementById('forwardDaysInput')?.value,
+                1,
+                Infinity,
+                this.state.forwardDays
             );
 
             const start = this.yearsAgo(this.state.lookbackYears);
@@ -313,13 +331,14 @@ const AssetAnalysis = {
             returns.push({
                 date: prices[i].date,
                 value: prices[i].price / prices[i - n].price - 1,
+                priceIndex: i,
             });
         }
 
         const values = returns.map(item => item.value).sort((a, b) => a - b);
         const current = returns[returns.length - 1];
         const percentile = this.percentileRank(values, current.value);
-        const trend = this.buildPercentileTrend(returns, values);
+        const trend = this.buildPercentileTrend(returns, values, prices);
         const percentiles = {
             min: values[0],
             p10: this.quantile(values, 0.1),
@@ -386,7 +405,7 @@ const AssetAnalysis = {
         placeholder.style.display = 'flex';
         const text = placeholder.querySelector('p');
         if (text) {
-            text.textContent = message || 'Load calculator assets, choose an n-day return window, then analyze the current return against history.';
+            text.textContent = message || 'Load Portfolio Watcher assets, choose an n-day return window, then analyze the current return against history.';
         }
     },
 
@@ -415,13 +434,20 @@ const AssetAnalysis = {
         }).join('');
     },
 
-    buildPercentileTrend(returns, sortedValues) {
+    buildPercentileTrend(returns, sortedValues, prices) {
         const trendLength = Math.min(this.state.trendDays, returns.length);
-        return returns.slice(-trendLength).map(item => ({
-            date: item.date,
-            value: item.value,
-            percentile: this.percentileRank(sortedValues, item.value),
-        }));
+        const k = this.state.forwardDays;
+        return returns.slice(-trendLength).map(item => {
+            const i = item.priceIndex;
+            // Forward k-trading-day return; null when the future is not yet realized.
+            const realized = i + k < prices.length;
+            return {
+                date: item.date,
+                value: item.value,
+                percentile: this.percentileRank(sortedValues, item.value),
+                forwardReturn: realized ? prices[i + k].price / prices[i].price - 1 : null,
+            };
+        });
     },
 
     renderPercentileTrend(analysis) {
@@ -456,11 +482,15 @@ const AssetAnalysis = {
             .reverse()
             .map(item => {
                 const color = this.signalColor(item.percentile);
+                const forward = item.forwardReturn === null
+                    ? '<span class="forward-pending">pending</span>'
+                    : `<span style="color: ${item.forwardReturn >= 0 ? '#10b981' : '#ef4444'};">${Utils.formatPercent(item.forwardReturn, 2)}</span>`;
                 return `
                     <tr>
                         <td>${item.date}</td>
                         <td>${Utils.formatPercent(item.value, 2)}</td>
                         <td>${item.percentile.toFixed(1)}%</td>
+                        <td>${forward}</td>
                         <td><span class="position-chip" style="background: ${color};">${this.signalLabel(item.percentile)}</span></td>
                     </tr>
                 `;
@@ -469,93 +499,147 @@ const AssetAnalysis = {
     },
 
     renderPercentileTrendChart(trend) {
+        const k = this.state.forwardDays;
         const dates = trend.map(item => item.date);
         const percentiles = trend.map(item => item.percentile);
         const colors = percentiles.map(value => this.signalColor(value));
 
-        const trace = {
+        // Top subplot: percentile line.
+        const percentileTrace = {
             type: 'scatter',
             mode: 'lines+markers',
             x: dates,
             y: percentiles,
-            line: {
-                color: '#f1f5f9',
-                width: 2,
-            },
+            xaxis: 'x',
+            yaxis: 'y',
+            line: { color: '#f1f5f9', width: 2 },
             marker: {
                 size: 9,
                 color: colors,
                 line: { color: '#0a0e17', width: 1 },
             },
-            customdata: trend.map(item => item.value * 100),
-            hovertemplate: '%{x}<br>Percentile: %{y:.1f}%<br>Return: %{customdata:.2f}%<extra></extra>',
+            customdata: trend.map(item => [
+                (item.value * 100).toFixed(2),
+                item.forwardReturn === null ? 'pending' : `${(item.forwardReturn * 100).toFixed(2)}%`,
+            ]),
+            hovertemplate:
+                '%{x}<br>Percentile: %{y:.1f}%<br>'
+                + `${this.state.returnWindow}d return: %{customdata[0]}%<br>`
+                + `Next ${k}d return: %{customdata[1]}<extra></extra>`,
         };
+
+        // Bottom subplot: forward k-day return bars. Unrealized dates stay null (blank).
+        const forwardTrace = {
+            type: 'bar',
+            x: dates,
+            y: trend.map(item => (item.forwardReturn === null ? null : item.forwardReturn * 100)),
+            xaxis: 'x',
+            yaxis: 'y2',
+            marker: {
+                color: trend.map(item =>
+                    item.forwardReturn === null
+                        ? 'rgba(148, 163, 184, 0.25)'
+                        : item.forwardReturn >= 0
+                            ? 'rgba(16, 185, 129, 0.75)'
+                            : 'rgba(239, 68, 68, 0.75)'),
+                line: { color: 'rgba(241, 245, 249, 0.18)', width: 1 },
+            },
+            hovertemplate: `%{x}<br>Next ${k}d return: %{y:.2f}%<extra></extra>`,
+        };
+
+        const shapes = [
+            {
+                type: 'rect', xref: 'paper', x0: 0, x1: 1, y0: 75, y1: 100, yref: 'y',
+                fillcolor: 'rgba(239, 68, 68, 0.10)', line: { width: 0 }, layer: 'below',
+            },
+            {
+                type: 'rect', xref: 'paper', x0: 0, x1: 1, y0: 0, y1: 25, yref: 'y',
+                fillcolor: 'rgba(16, 185, 129, 0.10)', line: { width: 0 }, layer: 'below',
+            },
+            {
+                type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 50, y1: 50, yref: 'y',
+                line: { color: '#f59e0b', width: 1, dash: 'dot' },
+            },
+        ];
+
+        const annotations = [
+            {
+                xref: 'paper', yref: 'y', x: 1, y: 50, text: 'Median', showarrow: false,
+                xanchor: 'right', yanchor: 'bottom', font: { color: '#f59e0b', size: 11 },
+            },
+        ];
+
+        // Placeholder shadow over the trailing dates whose next k days are not yet realized.
+        const firstUnrealized = trend.findIndex(item => item.forwardReturn === null);
+        if (firstUnrealized !== -1) {
+            shapes.push({
+                type: 'rect', xref: 'x', yref: 'paper',
+                x0: firstUnrealized - 0.5, x1: dates.length - 0.5,
+                y0: 0, y1: 0.30,
+                fillcolor: 'rgba(148, 163, 184, 0.12)',
+                line: { color: 'rgba(148, 163, 184, 0.35)', width: 1, dash: 'dot' },
+                layer: 'below',
+            });
+            annotations.push({
+                xref: 'x', yref: 'paper',
+                x: (firstUnrealized + dates.length - 1) / 2,
+                y: 0.15,
+                text: `Next ${k}d return<br>not yet realized`,
+                showarrow: false,
+                font: { color: '#94a3b8', size: 10 },
+                align: 'center',
+            });
+        }
 
         const layout = {
             paper_bgcolor: 'transparent',
             plot_bgcolor: 'transparent',
             font: { color: '#f1f5f9', family: 'JetBrains Mono, monospace' },
             margin: { l: 56, r: 24, t: 20, b: 56 },
+            showlegend: false,
+            bargap: 0.15,
+            dragmode: 'zoom',
+            hovermode: 'closest',
             xaxis: {
+                type: 'category',
                 title: 'Date',
                 gridcolor: '#2d3748',
+                anchor: 'y2',
+                nticks: 10,
             },
             yaxis: {
                 title: 'Percentile',
                 range: [0, 100],
                 gridcolor: '#2d3748',
                 zeroline: false,
+                domain: [0.46, 1],
             },
-            shapes: [
-                {
-                    type: 'rect',
-                    xref: 'paper',
-                    x0: 0,
-                    x1: 1,
-                    y0: 75,
-                    y1: 100,
-                    fillcolor: 'rgba(239, 68, 68, 0.10)',
-                    line: { width: 0 },
-                    layer: 'below',
-                },
-                {
-                    type: 'rect',
-                    xref: 'paper',
-                    x0: 0,
-                    x1: 1,
-                    y0: 0,
-                    y1: 25,
-                    fillcolor: 'rgba(16, 185, 129, 0.10)',
-                    line: { width: 0 },
-                    layer: 'below',
-                },
-                {
-                    type: 'line',
-                    xref: 'paper',
-                    x0: 0,
-                    x1: 1,
-                    y0: 50,
-                    y1: 50,
-                    line: { color: '#f59e0b', width: 1, dash: 'dot' },
-                },
-            ],
-            annotations: [
-                {
-                    xref: 'paper',
-                    x: 1,
-                    y: 50,
-                    text: 'Median',
-                    showarrow: false,
-                    xanchor: 'right',
-                    yanchor: 'bottom',
-                    font: { color: '#f59e0b', size: 11 },
-                },
-            ],
+            yaxis2: {
+                title: `Next ${k}d %`,
+                gridcolor: '#2d3748',
+                zerolinecolor: '#64748b',
+                domain: [0, 0.30],
+                anchor: 'x',
+            },
+            shapes,
+            annotations,
         };
 
-        Plotly.newPlot('percentileTrendChart', [trace], layout, {
+        Plotly.newPlot('percentileTrendChart', [percentileTrace, forwardTrace], layout, {
             responsive: true,
             displayModeBar: false,
+            scrollZoom: true,
+        });
+    },
+
+    resetTrendZoom() {
+        const chart = document.getElementById('percentileTrendChart');
+        if (!chart || !chart.data) return;
+        // Shared x-axis resets both the percentile line and the forward-return bars together.
+        Plotly.relayout(chart, {
+            'xaxis.autorange': true,
+            'yaxis.range': [0, 100],
+            'yaxis2.autorange': true,
         });
     },
 

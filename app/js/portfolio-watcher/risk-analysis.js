@@ -464,13 +464,13 @@ const RiskAnalysis = {
     async analyze(priceHistory = null) {
         // Fetch historical prices if not provided
         if (!priceHistory) {
-            const window = CalculatorState.config.lookbackWindow;
+            const window = PortfolioWatcherState.config.lookbackWindow;
             priceHistory = await DataManager.fetchHistoricalPrices(window);
         }
         
-        const weights = CalculatorState.getWeights();
-        const targetCash = CalculatorState.config.targetCash;
-        const leverageRate = CalculatorState.config.leverageRate || 1;
+        const weights = PortfolioWatcherState.getWeights();
+        const targetCash = PortfolioWatcherState.config.targetCash;
+        const leverageRate = PortfolioWatcherState.config.leverageRate || 1;
         const riskFreeRate = 0;
         
         // Gross exposure (position size) shown for reference only.
@@ -569,7 +569,7 @@ const RiskAnalysis = {
         };
         
         // Store in state
-        CalculatorState.setResult('riskMetrics', metrics);
+        PortfolioWatcherState.setResult('riskMetrics', metrics);
         
         return metrics;
     },

@@ -1,24 +1,24 @@
 /**
- * Portfolio Calculator - Main Application
- * Orchestrates all calculator modules
+ * Portfolio Watcher - Main Application
+ * Orchestrates all Portfolio Watcher modules
  */
 
-const Calculator = {
+const PortfolioWatcher = {
     // =========================================================================
     // Initialization
     // =========================================================================
     
     /**
-     * Initialize the calculator application
+     * Initialize the Portfolio Watcher application
      */
     async init() {
-        console.log('Initializing Portfolio Calculator...');
+        console.log('Initializing Portfolio Watcher...');
         
         // Load saved state
-        CalculatorState.loadFromStorage();
+        PortfolioWatcherState.loadFromStorage();
         
         // Initialize UI
-        CalculatorUI.init();
+        PortfolioWatcherUI.init();
         
         // Bind event listeners
         this.bindEvents();
@@ -26,7 +26,7 @@ const Calculator = {
         // Check and update data
         await this.initializeData();
         
-        console.log('Portfolio Calculator initialized');
+        console.log('Portfolio Watcher initialized');
     },
     
     /**
@@ -46,27 +46,27 @@ const Calculator = {
         
         // Config inputs
         document.getElementById('targetCash')?.addEventListener('change', (e) => {
-            CalculatorState.setTargetCash(parseFloat(e.target.value) || 100000);
-            CalculatorUI.syncLeverageForShareMode();
+            PortfolioWatcherState.setTargetCash(parseFloat(e.target.value) || 100000);
+            PortfolioWatcherUI.syncLeverageForShareMode();
         });
         
         document.getElementById('lookbackWindow')?.addEventListener('change', (e) => {
-            CalculatorState.setLookbackWindow(parseInt(e.target.value) || 252);
+            PortfolioWatcherState.setLookbackWindow(parseInt(e.target.value) || 252);
         });
         
         document.getElementById('leverageRate')?.addEventListener('change', (e) => {
-            if (CalculatorUI.getAllocationMode() === 'weight') {
-                CalculatorState.setLeverageRate(parseFloat(e.target.value) || 1);
+            if (PortfolioWatcherUI.getAllocationMode() === 'weight') {
+                PortfolioWatcherState.setLeverageRate(parseFloat(e.target.value) || 1);
             } else {
-                CalculatorUI.syncLeverageForShareMode();
+                PortfolioWatcherUI.syncLeverageForShareMode();
             }
         });
 
         document.getElementById('allocationMode')?.addEventListener('change', (e) => {
             const mode = ['shares', 'value'].includes(e.target.value) ? e.target.value : 'weight';
-            CalculatorState.setAllocationMode(mode);
-            CalculatorUI.renderAssetsList();
-            CalculatorUI.syncAllocationModeUI();
+            PortfolioWatcherState.setAllocationMode(mode);
+            PortfolioWatcherUI.renderAssetsList();
+            PortfolioWatcherUI.syncAllocationModeUI();
         });
         
         // Calculate button
@@ -77,25 +77,25 @@ const Calculator = {
      * Initialize data - check freshness and update if needed
      */
     async initializeData() {
-        const tickers = CalculatorState.getTickers();
+        const tickers = PortfolioWatcherState.getTickers();
         
         if (tickers.length === 0) {
-            CalculatorUI.updateDataStatus('fresh', 'No assets configured');
+            PortfolioWatcherUI.updateDataStatus('fresh', 'No assets configured');
             return;
         }
         
-        CalculatorUI.updateDataStatus('updating', 'Checking data freshness...');
+        PortfolioWatcherUI.updateDataStatus('updating', 'Checking data freshness...');
         
         try {
             // Check freshness
             await DataManager.checkAllFreshness();
             
             // Update if stale
-            if (!CalculatorState.dataStatus.isFresh) {
-                CalculatorUI.updateDataStatus('updating', 'Updating stale data...');
+            if (!PortfolioWatcherState.dataStatus.isFresh) {
+                PortfolioWatcherUI.updateDataStatus('updating', 'Updating stale data...');
                 
                 await DataManager.updateStaleData((ticker, current, total) => {
-                    CalculatorUI.updateDataStatus('updating', `Updating ${ticker} (${current}/${total})...`);
+                    PortfolioWatcherUI.updateDataStatus('updating', `Updating ${ticker} (${current}/${total})...`);
                 });
             }
             
@@ -106,13 +106,13 @@ const Calculator = {
             await DataManager.fetchRiskFreeRate();
             
             // Update UI
-            CalculatorUI.renderAssetsList();
-            CalculatorUI.updateDataStatus('fresh', 'Data up to date');
+            PortfolioWatcherUI.renderAssetsList();
+            PortfolioWatcherUI.updateDataStatus('fresh', 'Data up to date');
             
         } catch (error) {
             console.error('Data initialization error:', error);
-            CalculatorUI.updateDataStatus('stale', 'Data update failed');
-            CalculatorUI.toast('Failed to update data: ' + error.message, 'error');
+            PortfolioWatcherUI.updateDataStatus('stale', 'Data update failed');
+            PortfolioWatcherUI.toast('Failed to update data: ' + error.message, 'error');
         }
     },
     
@@ -124,56 +124,56 @@ const Calculator = {
      * Add a new asset
      */
     async addAsset() {
-        const { ticker, weight, targetShares, targetValue, mode } = CalculatorUI.getNewAssetInput();
+        const { ticker, weight, targetShares, targetValue, mode } = PortfolioWatcherUI.getNewAssetInput();
         
         if (!ticker) {
-            CalculatorUI.toast('Please enter a ticker symbol', 'error');
+            PortfolioWatcherUI.toast('Please enter a ticker symbol', 'error');
             return;
         }
         
         if (mode === 'shares') {
             if (targetShares <= 0) {
-                CalculatorUI.toast('Please enter a valid target share count', 'error');
+                PortfolioWatcherUI.toast('Please enter a valid target share count', 'error');
                 return;
             }
         } else if (mode === 'value') {
             if (targetValue <= 0) {
-                CalculatorUI.toast('Please enter a valid target value', 'error');
+                PortfolioWatcherUI.toast('Please enter a valid target value', 'error');
                 return;
             }
         } else if (weight <= 0) {
-            CalculatorUI.toast('Please enter a valid weight', 'error');
+            PortfolioWatcherUI.toast('Please enter a valid weight', 'error');
             return;
         }
         
         // Check if already exists
-        if (CalculatorState.assets.find(a => a.ticker === ticker)) {
-            CalculatorUI.toast(`${ticker} already added`, 'info');
+        if (PortfolioWatcherState.assets.find(a => a.ticker === ticker)) {
+            PortfolioWatcherUI.toast(`${ticker} already added`, 'info');
             return;
         }
         
         // Add to state
-        CalculatorState.addAsset(ticker, weight, 0, targetShares, targetValue);
+        PortfolioWatcherState.addAsset(ticker, weight, 0, targetShares, targetValue);
         
         // Clear input
-        CalculatorUI.clearNewAssetInput();
+        PortfolioWatcherUI.clearNewAssetInput();
         
         // Render list
-        CalculatorUI.renderAssetsList();
+        PortfolioWatcherUI.renderAssetsList();
         
         // Load data for new ticker
-        CalculatorUI.showLoading(`Loading data for ${ticker}...`);
+        PortfolioWatcherUI.showLoading(`Loading data for ${ticker}...`);
         
         try {
             await API.loadData(ticker, null, null, 'yfinance');
             await DataManager.fetchLatestPrices();
-            CalculatorUI.renderAssetsList();
-            CalculatorUI.syncLeverageForShareMode();
-            CalculatorUI.toast(`${ticker} added successfully`, 'success');
+            PortfolioWatcherUI.renderAssetsList();
+            PortfolioWatcherUI.syncLeverageForShareMode();
+            PortfolioWatcherUI.toast(`${ticker} added successfully`, 'success');
         } catch (error) {
-            CalculatorUI.toast(`Failed to load data for ${ticker}: ${error.message}`, 'error');
+            PortfolioWatcherUI.toast(`Failed to load data for ${ticker}: ${error.message}`, 'error');
         } finally {
-            CalculatorUI.hideLoading();
+            PortfolioWatcherUI.hideLoading();
         }
     },
     
@@ -182,10 +182,10 @@ const Calculator = {
      * @param {string} ticker - Ticker symbol
      */
     removeAsset(ticker) {
-        CalculatorState.removeAsset(ticker);
-        CalculatorUI.renderAssetsList();
-        CalculatorUI.syncLeverageForShareMode();
-        CalculatorUI.toast(`${ticker} removed`, 'info');
+        PortfolioWatcherState.removeAsset(ticker);
+        PortfolioWatcherUI.renderAssetsList();
+        PortfolioWatcherUI.syncLeverageForShareMode();
+        PortfolioWatcherUI.toast(`${ticker} removed`, 'info');
     },
     
     /**
@@ -195,8 +195,8 @@ const Calculator = {
      */
     onWeightChange(ticker, value) {
         const weight = parseFloat(value) / 100;
-        CalculatorState.updateWeight(ticker, weight);
-        CalculatorUI.updateTotalWeight();
+        PortfolioWatcherState.updateWeight(ticker, weight);
+        PortfolioWatcherUI.updateTotalWeight();
     },
 
     /**
@@ -206,9 +206,9 @@ const Calculator = {
      */
     onTargetSharesChange(ticker, value) {
         const shares = parseInt(value, 10) || 0;
-        CalculatorState.updateTargetShares(ticker, shares);
-        CalculatorUI.renderAssetsList();
-        CalculatorUI.syncLeverageForShareMode();
+        PortfolioWatcherState.updateTargetShares(ticker, shares);
+        PortfolioWatcherUI.renderAssetsList();
+        PortfolioWatcherUI.syncLeverageForShareMode();
     },
 
     /**
@@ -218,9 +218,9 @@ const Calculator = {
      */
     onTargetValueChange(ticker, value) {
         const targetValue = parseFloat(value) || 0;
-        CalculatorState.updateTargetValue(ticker, targetValue);
-        CalculatorUI.renderAssetsList();
-        CalculatorUI.syncLeverageForShareMode();
+        PortfolioWatcherState.updateTargetValue(ticker, targetValue);
+        PortfolioWatcherUI.renderAssetsList();
+        PortfolioWatcherUI.syncLeverageForShareMode();
     },
     
     /**
@@ -230,23 +230,23 @@ const Calculator = {
      */
     onHoldingChange(ticker, value) {
         const shares = parseInt(value) || 0;
-        CalculatorState.updateCurrentShares(ticker, shares);
+        PortfolioWatcherState.updateCurrentShares(ticker, shares);
     },
     
     /**
      * Import assets from the backtest viewer
      */
     async importFromViewer() {
-        const success = CalculatorState.importFromViewer();
+        const success = PortfolioWatcherState.importFromViewer();
         
         if (success) {
-            CalculatorUI.renderAssetsList();
-            CalculatorUI.toast('Imported assets from Backtest viewer', 'success');
+            PortfolioWatcherUI.renderAssetsList();
+            PortfolioWatcherUI.toast('Imported assets from Backtest viewer', 'success');
             
             // Initialize data for imported tickers
             await this.initializeData();
         } else {
-            CalculatorUI.toast('No assets found in Backtest viewer', 'info');
+            PortfolioWatcherUI.toast('No assets found in Backtest viewer', 'info');
         }
     },
     
@@ -255,7 +255,7 @@ const Calculator = {
      * @param {string} sectionId - Section element ID
      */
     toggleSection(sectionId) {
-        CalculatorUI.toggleSection(sectionId);
+        PortfolioWatcherUI.toggleSection(sectionId);
     },
     
     // =========================================================================
@@ -266,44 +266,44 @@ const Calculator = {
      * Run all calculations
      */
     async calculate() {
-        const tickers = CalculatorState.getTickers();
+        const tickers = PortfolioWatcherState.getTickers();
         
         if (tickers.length === 0) {
-            CalculatorUI.toast('Add assets before calculating', 'error');
+            PortfolioWatcherUI.toast('Add assets before calculating', 'error');
             return;
         }
         
-        CalculatorUI.showLoading('Calculating positions...');
-        CalculatorUI.updateStatus('Calculating...');
+        PortfolioWatcherUI.showLoading('Calculating positions...');
+        PortfolioWatcherUI.updateStatus('Calculating...');
         
         try {
             // Update config from UI
-            CalculatorState.setTargetCash(CalculatorUI.getTargetCash());
-            CalculatorState.setLookbackWindow(CalculatorUI.getLookbackWindow());
-            if (CalculatorUI.getAllocationMode() === 'weight') {
-                CalculatorState.setLeverageRate(CalculatorUI.getLeverageRate());
+            PortfolioWatcherState.setTargetCash(PortfolioWatcherUI.getTargetCash());
+            PortfolioWatcherState.setLookbackWindow(PortfolioWatcherUI.getLookbackWindow());
+            if (PortfolioWatcherUI.getAllocationMode() === 'weight') {
+                PortfolioWatcherState.setLeverageRate(PortfolioWatcherUI.getLeverageRate());
             }
             
             // Ensure we have latest prices
-            if (Object.keys(CalculatorState.prices).length === 0) {
+            if (Object.keys(PortfolioWatcherState.prices).length === 0) {
                 await DataManager.fetchLatestPrices();
             }
 
             let positionOptions = {};
-            if (CalculatorUI.getAllocationMode() !== 'weight') {
-                const shareMode = CalculatorState.getShareModePortfolio();
+            if (PortfolioWatcherUI.getAllocationMode() !== 'weight') {
+                const shareMode = PortfolioWatcherState.getShareModePortfolio();
                 if (shareMode.totalTargetValue <= 0) {
-                    const message = CalculatorUI.getAllocationMode() === 'value'
+                    const message = PortfolioWatcherUI.getAllocationMode() === 'value'
                         ? 'Enter target values greater than 0 for at least one asset'
                         : 'Enter target shares greater than 0 for at least one asset';
-                    CalculatorUI.toast(message, 'error');
+                    PortfolioWatcherUI.toast(message, 'error');
                     return;
                 }
                 Object.entries(shareMode.weights).forEach(([ticker, weight]) => {
-                    CalculatorState.updateWeight(ticker, weight);
+                    PortfolioWatcherState.updateWeight(ticker, weight);
                 });
-                CalculatorState.setLeverageRate(shareMode.leverageRate);
-                CalculatorUI.syncLeverageForShareMode();
+                PortfolioWatcherState.setLeverageRate(shareMode.leverageRate);
+                PortfolioWatcherUI.syncLeverageForShareMode();
                 positionOptions = {
                     weights: shareMode.weights,
                     leverageRate: shareMode.leverageRate,
@@ -312,52 +312,52 @@ const Calculator = {
                 };
             } else {
                 // Check total weight for weight mode
-                const totalWeight = CalculatorState.getTotalWeight();
+                const totalWeight = PortfolioWatcherState.getTotalWeight();
                 if (Math.abs(totalWeight - 1) > 0.01) {
-                    CalculatorUI.toast('Weights should sum to 100%', 'error');
+                    PortfolioWatcherUI.toast('Weights should sum to 100%', 'error');
                     return;
                 }
             }
             
             // Calculate positions
-            CalculatorUI.showLoading('Calculating positions...');
-            const { positions, orders } = PositionCalculator.calculate(positionOptions);
+            PortfolioWatcherUI.showLoading('Calculating positions...');
+            const { positions, orders } = PositionSizer.calculate(positionOptions);
             
             // Render position results
-            CalculatorUI.renderPositionSummary(positions);
+            PortfolioWatcherUI.renderPositionSummary(positions);
             // Calculate risk metrics
-            CalculatorUI.showLoading('Analyzing risk...');
+            PortfolioWatcherUI.showLoading('Analyzing risk...');
             const riskMetrics = await RiskAnalysis.analyze();
             
             // Render risk metrics
-            CalculatorUI.renderRiskMetrics(riskMetrics);
+            PortfolioWatcherUI.renderRiskMetrics(riskMetrics);
             
             // Calculate and render projection
-            CalculatorUI.showLoading('Generating projection...');
+            PortfolioWatcherUI.showLoading('Generating projection...');
             const projection = Projection.run();
             
             // Render projection summary
-            CalculatorUI.renderProjectionSummary(projection);
+            PortfolioWatcherUI.renderProjectionSummary(projection);
             
             // Update status
-            CalculatorUI.updateLastCalculated();
-            CalculatorUI.updateStatus('Calculation complete');
-            CalculatorUI.toast('Calculation complete', 'success');
+            PortfolioWatcherUI.updateLastCalculated();
+            PortfolioWatcherUI.updateStatus('Calculation complete');
+            PortfolioWatcherUI.toast('Calculation complete', 'success');
             
         } catch (error) {
             console.error('Calculation error:', error);
-            CalculatorUI.toast('Calculation failed: ' + error.message, 'error');
-            CalculatorUI.updateStatus('Calculation failed');
+            PortfolioWatcherUI.toast('Calculation failed: ' + error.message, 'error');
+            PortfolioWatcherUI.updateStatus('Calculation failed');
         } finally {
-            CalculatorUI.hideLoading();
+            PortfolioWatcherUI.hideLoading();
         }
     },
 };
 
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-    Calculator.init();
+    PortfolioWatcher.init();
 });
 
 // Export for global access
-window.Calculator = Calculator;
+window.PortfolioWatcher = PortfolioWatcher;
